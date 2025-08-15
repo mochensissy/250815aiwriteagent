@@ -1,0 +1,52 @@
+# GitHub 推送问题解决方案：ClashX 代理配置
+
+## 概述
+当通过 Git 推送代码到 GitHub 时，如果遇到“Failed to connect to github.com port 443”的连接错误，通常是由于网络代理设置不正确或冲突导致的。本方案记录了在 ClashX 开启的情况下，如何正确配置 Git 以成功推送代码。
+
+## 问题描述
+- **错误信息**：`fatal: unable to access 'https://github.com/mochensissy/guantongai250715.git/': Failed to connect to github.com port 443 after XXXX ms: Couldn't connect to server`
+- **原因**：本地网络环境需要通过代理才能访问 GitHub，但 Git 没有正确配置代理，或者 Git 配置与 ClashX 代理冲突。
+
+## 解决方案
+
+### 步骤1：确保 ClashX 处于开启状态
+这是最关键的一步。请确认您的 ClashX 软件正在运行，并且已连接到可用的代理服务。根据之前的设置，ClashX 的 HTTP 代理端口通常是 `7890`。
+
+### 步骤2：在终端中配置 Git 使用 ClashX 代理
+打开您的终端（Terminal），并执行以下两条命令来全局配置 Git 使用 ClashX 的 HTTP 和 HTTPS 代理。这些命令只需要执行一次，除非您的 ClashX 代理端口发生变化或您需要取消代理。
+
+```bash
+git config --global http.proxy http://127.0.0.1:7890
+git config --global https.proxy http://127.0.0.1:7890
+```
+- `git config --global http.proxy http://127.0.0.1:7890`：设置 Git 的 HTTP 流量通过本地的 7890 端口代理。
+- `git config --global https.proxy http://127.0.0.1:7890`：设置 Git 的 HTTPS 流量通过本地的 7890 端口代理。
+
+### 步骤3：执行正常的 Git 推送命令
+在 Git 代理配置完成后，您可以像往常一样执行 Git 命令来添加、提交和推送到 GitHub。
+
+```bash
+# 检查当前 Git 仓库状态（可选）
+git status
+
+# 添加所有更改到暂存区
+git add .
+
+# 提交更改，并附上提交信息
+git commit -m "你的提交信息"
+
+# 推送到 GitHub 的指定分支（例如：nextjs-migration）
+git push origin nextjs-migration
+```
+
+## 关键点解释
+- **127.0.0.1:7890**：`127.0.0.1` 是您的本地主机地址，`7890` 是 ClashX 默认的 HTTP/SOCKS5 代理端口。确保这个端口与您 ClashX 设置中的“代理端口”一致。
+- **--global 参数**：`--global` 参数表示这些 Git 配置将应用于您系统上所有 Git 仓库，而不仅仅是当前仓库。如果您只想为特定仓库设置代理，可以使用 `--local` 参数。
+
+## 故障排除建议（如果问题仍然存在）
+1. **核对 ClashX 代理端口**：确保 Git 配置中的端口与 ClashX 实际使用的代理端口完全一致。
+2. **检查 ClashX 模式**：确保 ClashX 处于“全局模式”或“规则模式”下包含了 GitHub 域名，以确保其流量被正确代理。
+3. **网络连接**：确认您的设备网络连接正常，可以访问其他非代理网站。
+4. **防火墙/安全软件**：检查是否有防火墙或安全软件阻止了 Git 或 ClashX 的网络连接。
+
+希望这份文档能帮助您和您未来的工作！ 
