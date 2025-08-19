@@ -117,6 +117,24 @@ export const useAppState = () => {
                 saveKnowledgeBase(updatedKnowledgeBaseWithStyle);
                 
                 console.log('🎨 风格要素已更新到状态');
+                
+                // 查找与新文章相似的现有文章
+                const existingMemoryArticles = updatedKnowledgeBase.filter(a => 
+                  a.category === 'memory' && a.id !== newArticle.id
+                );
+                
+                if (existingMemoryArticles.length > 0) {
+                  console.log('🔍 开始查找相似文章...');
+                  try {
+                    const similarArticles = await recommendStylePrototypes(content, existingMemoryArticles);
+                    if (similarArticles.length > 0) {
+                      console.log(`✨ 找到 ${similarArticles.length} 篇相似文章，相似度最高: ${similarArticles[0].similarity}%`);
+                      toast.success(`发现 ${similarArticles.length} 篇相似风格的文章！`);
+                    }
+                  } catch (error) {
+                    console.error('相似文章查找失败:', error);
+                  }
+                }
               }
             } catch (styleError) {
               console.error('风格分析失败:', styleError);
@@ -168,9 +186,16 @@ export const useAppState = () => {
       // 先推荐风格原型
       await recommendStylePrototypesFromDraft(draft);
       
-      // 获取风格上下文
-      const styleContext = appState.styleElements.map(e => e.description).join('; ');
+      // 获取风格上下文（从所有记忆库文章的风格要素中）
+      const allStyleElements = appState.knowledgeBase
+        .filter(a => a.category === 'memory')
+        .flatMap(a => a.styleElements || [])
+        .filter(e => e.confirmed) // 只使用已确认的风格要素
+        .map(e => e.description);
+      
+      const styleContext = allStyleElements.join('; ');
       console.log('🎨 风格上下文:', styleContext || '无风格上下文');
+      console.log('📊 可用风格要素数量:', allStyleElements.length);
       
       // 调用AI生成大纲
       console.log('🤖 调用AI生成个性化大纲...');
@@ -298,8 +323,16 @@ ${appState.currentArticle.content}
       console.log('📋 大纲节点数量:', appState.currentArticle.outline.length);
       console.log('📝 草稿长度:', appState.currentArticle.draft.length);
       
-      const styleContext = appState.styleElements.map(e => e.description).join('; ');
+      // 获取风格上下文（从所有记忆库文章的风格要素中）
+      const allStyleElements = appState.knowledgeBase
+        .filter(a => a.category === 'memory')
+        .flatMap(a => a.styleElements || [])
+        .filter(e => e.confirmed) // 只使用已确认的风格要素
+        .map(e => e.description);
+      
+      const styleContext = allStyleElements.join('; ');
       console.log('🎨 风格上下文:', styleContext || '无风格上下文');
+      console.log('📊 可用风格要素数量:', allStyleElements.length);
       
       let fullContent: string;
       try {
