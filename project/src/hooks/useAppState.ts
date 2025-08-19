@@ -270,6 +270,7 @@ export const useAppState = () => {
         finalOutline = aiOutline.map((node, index) => ({
           id: String(index + 1),
           title: node.title || `章节 ${index + 1}`,
+          summary: node.summary || '内容概述待补充',
           level: node.level || 1,
           order: index
         }));
@@ -303,12 +304,15 @@ export const useAppState = () => {
 
   // 开始新文章创作
   const startNewArticle = async (draft: string, platform: string = '公众号') => {
+    console.log('🚀 startNewArticle 函数被调用');
+    console.log('📝 传入参数 - 草稿长度:', draft?.length || 0);
+    console.log('🎯 传入参数 - 目标平台:', platform);
+    
     setIsProcessing(true);
     
     try {
-      console.log('🚀 开始创作新文章');
-      console.log('📝 草稿长度:', draft.length);
-      console.log('🎯 目标平台:', platform);
+      console.log('✅ 开始创作新文章流程');
+      console.log('📝 草稿内容预览:', draft.substring(0, 100) + '...');
       
       // 先推荐风格原型，并直接在函数内返回结果
       console.log('🔍 推荐风格原型...');
@@ -370,7 +374,7 @@ export const useAppState = () => {
         console.log('   1. 题材差异太大');
         console.log('   2. 写作特征未提取');
         console.log('   3. API调用失败');
-        toast.warning('没有找到匹配的风格文章，将使用通用模板生成大纲');
+        toast('没有找到匹配的风格文章，将使用通用模板生成大纲', { icon: '⚠️' });
       }
       
       console.log('⚠️ 没有找到推荐的风格原型，继续使用通用风格生成大纲...');
@@ -450,14 +454,16 @@ export const useAppState = () => {
 
       toast.success('文章大纲已生成！');
     } catch (error) {
-      console.error('创作启动失败:', error);
+      console.error('❌ 创作启动失败，详细错误信息:', error);
+      console.error('❌ 错误类型:', typeof error);
+      console.error('❌ 错误堆栈:', error instanceof Error ? error.stack : 'No stack trace');
       toast.error(`创作启动失败: ${error instanceof Error ? error.message : '未知错误'}`);
       
       // 即使出错也提供基础大纲
       const fallbackOutline: OutlineNode[] = [
-        { id: '1', title: '引言', level: 1, order: 0 },
-        { id: '2', title: '主体内容', level: 1, order: 1 },
-        { id: '3', title: '总结', level: 1, order: 2 }
+        { id: '1', title: '引言', summary: '文章开头部分', level: 1, order: 0 },
+        { id: '2', title: '主体内容', summary: '文章核心内容', level: 1, order: 1 },
+        { id: '3', title: '总结', summary: '文章总结部分', level: 1, order: 2 }
       ];
       
       setAppState(prev => ({
