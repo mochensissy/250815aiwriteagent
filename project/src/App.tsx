@@ -181,6 +181,22 @@ function App() {
               添加测试案例
             </button>
             <button
+              onClick={() => {
+                console.log('🧪 打印当前应用状态...');
+                console.log('📚 知识库状态:', {
+                  总数: appState.knowledgeBase.length,
+                  案例库: appState.knowledgeBase.filter(a => a.category === 'case').length,
+                  记忆库: appState.knowledgeBase.filter(a => a.category === 'memory').length,
+                  详细: appState.knowledgeBase.map(a => ({ id: a.id, title: a.title, category: a.category }))
+                });
+                console.log('🎯 当前风格原型:', stylePrototypes);
+                console.log('📝 当前文章:', appState.currentArticle);
+              }}
+              className="flex items-center gap-2 px-3 py-1 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-lg transition-colors"
+            >
+              调试状态
+            </button>
+            <button
               onClick={() => setShowAPIManager(true)}
               className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
               title="API管理"

@@ -257,9 +257,11 @@ export const useAppState = () => {
       const styleContext = selectedStyleElements.join('; ');
       console.log('🎨 选定的风格上下文:', styleContext);
       
-      // 调用AI生成大纲
-      const { generateOutline } = await import('../utils/api');
-      const aiOutline = await generateOutline(appState.currentArticle.draft, styleContext || '通用写作风格');
+              // 调用AI生成大纲
+        const { generateOutline } = await import('../utils/api');
+        const aiOutline = await generateOutline(appState.currentArticle.draft, styleContext || '通用写作风格');
+        
+        console.log('🎯 生成的大纲结果:', aiOutline);
       
       // 处理AI生成的大纲
       let finalOutline: OutlineNode[];
@@ -274,10 +276,10 @@ export const useAppState = () => {
       } else {
         console.log('⚠️ AI生成失败，使用备用大纲');
         finalOutline = [
-          { id: '1', title: '开篇：引出话题', level: 1, order: 0 },
-          { id: '2', title: '核心观点展开', level: 1, order: 1 },
-          { id: '3', title: '个人思考感悟', level: 1, order: 2 },
-          { id: '4', title: '结语：呼应升华', level: 1, order: 3 }
+          { id: '1', title: '开篇：引出话题', summary: '分享个人经历，引出核心话题', level: 1, order: 0 },
+          { id: '2', title: '核心观点展开', summary: '详细阐述草稿中的主要观点', level: 1, order: 1 },
+          { id: '3', title: '个人思考感悟', summary: '分享个人的深入思考和感悟', level: 1, order: 2 },
+          { id: '4', title: '结语：呼应升华', summary: '总结观点，给出行动建议', level: 1, order: 3 }
         ];
       }
       
@@ -371,6 +373,7 @@ export const useAppState = () => {
         finalOutline = aiOutline.map((node, index) => ({
           id: String(index + 1),
           title: node.title || `章节 ${index + 1}`,
+          summary: node.summary || '内容概述待补充',
           level: node.level || 1,
           order: index
         }));
@@ -380,24 +383,28 @@ export const useAppState = () => {
           {
             id: '1',
             title: '引言：背景介绍',
+            summary: '分享个人经历，引出核心话题',
             level: 1,
             order: 0
           },
           {
             id: '2', 
             title: '核心观点阐述',
+            summary: '详细阐述草稿中的主要观点',
             level: 1,
             order: 1
           },
           {
             id: '3',
             title: '具体案例分析',
+            summary: '通过具体案例支撑观点',
             level: 1,
             order: 2
           },
           {
             id: '4',
             title: '总结与展望',
+            summary: '总结全文，给出行动建议',
             level: 1,
             order: 3
           }

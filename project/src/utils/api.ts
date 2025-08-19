@@ -168,6 +168,15 @@ export const recommendStylePrototypes = async (draft: string, referenceArticles:
   console.log('🔍 开始AI风格原型推荐...');
   console.log('📝 草稿长度:', draft.length);
   console.log('📚 参考文章数量:', referenceArticles.length);
+  
+  // 检查API配置
+  const apiConfig = localStorage.getItem('apiConfig');
+  console.log('⚙️ API配置检查:', apiConfig ? 'API已配置' : 'API未配置');
+  
+  if (!apiConfig) {
+    console.warn('⚠️ 没有找到API配置，跳过推荐');
+    return [];
+  }
 
   const prompt = `
 基于用户的草稿内容，从参考文章中推荐最匹配的写作风格原型：
