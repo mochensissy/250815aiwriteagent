@@ -24,6 +24,7 @@ function App() {
     isProcessing,
     stylePrototypes,
     addToKnowledgeBase,
+    recommendStylePrototypesFromDraft,
     startNewArticle,
     generateArticle,
     handleEditInstruction,
@@ -50,9 +51,29 @@ function App() {
     setSelectedPrototype(prototype);
   };
 
+  // 处理外部搜索
+  const handleExternalSearch = async (query: string) => {
+    console.log('执行外部搜索:', query);
+    try {
+      await performExternalSearch(query);
+    } catch (error) {
+      console.error('外部搜索失败:', error);
+    }
+  };
+
   // 处理草稿提交
   const handleDraftSubmit = async (draft: string, platform: string) => {
     console.log('提交草稿:', draft.substring(0, 100) + '...', '平台:', platform);
+    
+    // 如果草稿长度足够且案例库不为空，先推荐风格原型
+    if (draft.length > 100) {
+      const caseArticles = appState.knowledgeBase.filter(a => a.category === 'case');
+      if (caseArticles.length > 0) {
+        console.log('🎨 草稿足够长且有案例库，先推荐风格原型...');
+        await recommendStylePrototypesFromDraft(draft);
+      }
+    }
+    
     await startNewArticle(draft, platform);
     setCurrentView('outline');
   };
@@ -149,7 +170,7 @@ function App() {
           <div className="flex-1 flex items-center justify-center p-8 bg-white">
             <DraftInput
               onSubmit={handleDraftSubmit}
-              onExternalSearch={performExternalSearch}
+              onExternalSearch={handleExternalSearch}
               stylePrototypes={stylePrototypes}
               onPrototypeSelect={handlePrototypeSelect}
               selectedPrototype={selectedPrototype}

@@ -62,7 +62,7 @@ export const useAppState = () => {
     source: 'upload' | 'paste' | 'url',
     url?: string
   ): Promise<void> => {
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
       try {
         const newArticle: KnowledgeBaseArticle = {
           id: Date.now().toString(),
@@ -79,6 +79,41 @@ export const useAppState = () => {
         setAppState(prev => ({ ...prev, knowledgeBase: updatedKnowledgeBase }));
         saveKnowledgeBase(updatedKnowledgeBase);
         
+        // 如果是记忆库文章，异步更新风格要素
+        if (category === 'memory') {
+          // 异步执行风格分析，不阻塞主流程
+          setTimeout(async () => {
+            try {
+              console.log('🎨 开始分析记忆库文章风格...');
+              const memoryArticles = updatedKnowledgeBase
+                .filter(a => a.category === 'memory')
+                .map(a => a.content);
+              
+              const styleElements = await analyzeStyleElements(memoryArticles);
+              console.log('✅ 风格分析完成，提取风格要素:', styleElements.length);
+              
+              if (styleElements.length > 0) {
+                const updatedStyleElements = styleElements.map((description, index) => ({
+                  id: `style_${Date.now()}_${index}`,
+                  description,
+                  confirmed: false, // 需要用户确认
+                  createdAt: new Date()
+                }));
+                
+                setAppState(prev => ({
+                  ...prev,
+                  styleElements: updatedStyleElements
+                }));
+                
+                console.log('🎨 风格要素已更新到状态');
+              }
+            } catch (styleError) {
+              console.error('风格分析失败:', styleError);
+              // 不影响主流程，静默处理
+            }
+          }, 1000);
+        }
+        
         // 模拟一点延迟来显示上传过程
         setTimeout(() => {
           resolve();
@@ -90,6 +125,26 @@ export const useAppState = () => {
     });
   };
 
+  // 推荐风格原型
+  const recommendStylePrototypesFromDraft = async (draft: string): Promise<void> => {
+    try {
+      console.log('🎨 开始推荐风格原型...');
+      const caseArticles = appState.knowledgeBase.filter(a => a.category === 'case');
+      
+      if (caseArticles.length === 0) {
+        console.log('⚠️ 案例库为空，无法推荐风格原型');
+        return;
+      }
+      
+      const prototypes = await recommendStylePrototypes(draft, caseArticles);
+      console.log('✅ 风格原型推荐完成:', prototypes.length);
+      
+      setStylePrototypes(prototypes);
+    } catch (error) {
+      console.error('风格原型推荐失败:', error);
+    }
+  };
+
   // 开始新文章创作
   const startNewArticle = async (draft: string, platform: string = '公众号') => {
     setIsProcessing(true);
@@ -98,6 +153,9 @@ export const useAppState = () => {
       console.log('🚀 开始创作新文章');
       console.log('📝 草稿长度:', draft.length);
       console.log('🎯 目标平台:', platform);
+      
+      // 先推荐风格原型
+      await recommendStylePrototypesFromDraft(draft);
       
       // 获取风格上下文
       const styleContext = appState.styleElements.map(e => e.description).join('; ');
@@ -479,6 +537,7 @@ ${appState.currentArticle.outline.map(node => {
     isProcessing,
     stylePrototypes,
     addToKnowledgeBase,
+    recommendStylePrototypesFromDraft,
     startNewArticle,
     generateArticle,
     generateTitleOptions,

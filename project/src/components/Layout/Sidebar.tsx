@@ -263,14 +263,33 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, onUpload, onArticleSelect }
       // 等待上传完成
       await onUpload(uploadContent, autoTitle, activeTab as 'memory' | 'case', sourceType);
       
+      // 如果是添加到记忆库，触发风格分析
+      if (activeTab === 'memory') {
+        console.log('🎨 添加到记忆库，开始风格分析...');
+        try {
+          const { analyzeStyleElements } = await import('../../utils/api');
+          const styleElements = await analyzeStyleElements([uploadContent]);
+          console.log('✅ 风格分析完成，提取到', styleElements.length, '个风格要素');
+          
+          if (styleElements.length > 0) {
+            toast.success(`文章已添加！检测到 ${styleElements.length} 个个人风格特征`);
+          } else {
+            toast.success('文章已添加到记忆库！');
+          }
+        } catch (styleError) {
+          console.error('风格分析失败:', styleError);
+          toast.success('文章已添加！（风格分析正在后台进行）');
+        }
+      } else {
+        toast.success(`成功添加到案例库！`);
+      }
+      
       // 设置成功状态
       setUploadSuccess(true);
       setUploadedArticle({
         title: autoTitle,
         category: activeTab === 'memory' ? '记忆库' : '案例库'
       });
-      
-      toast.success(`成功添加到${activeTab === 'memory' ? '记忆库' : '案例库'}！`);
       
       // 3秒后自动关闭并清理状态
       setTimeout(() => {

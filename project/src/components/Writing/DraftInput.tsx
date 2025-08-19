@@ -30,6 +30,7 @@ const DraftInput: React.FC<DraftInputProps> = ({
   const [selectedPlatform, setSelectedPlatform] = useState('公众号');
   const [showExternalSearch, setShowExternalSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isAnalyzingStyle, setIsAnalyzingStyle] = useState(false);
 
   const platforms = [
     { 
@@ -77,6 +78,27 @@ const DraftInput: React.FC<DraftInputProps> = ({
     
     setDraft(testDraft);
     setSelectedPlatform('公众号');
+    
+    // 自动触发风格分析
+    if (testDraft.length > 100) {
+      triggerStyleAnalysis(testDraft);
+    }
+  };
+
+  // 触发风格原型推荐
+  const triggerStyleAnalysis = async (draftText: string) => {
+    if (draftText.length < 100 || isAnalyzingStyle) return;
+    
+    setIsAnalyzingStyle(true);
+    try {
+      console.log('🎨 开始分析草稿并推荐风格原型...');
+      // 这里会触发父组件的风格推荐逻辑
+      // 实际的API调用应该在父组件或状态管理中处理
+    } catch (error) {
+      console.error('风格分析失败:', error);
+    } finally {
+      setIsAnalyzingStyle(false);
+    }
   };
 
   const handleExternalSearch = () => {
