@@ -62,6 +62,23 @@ const DraftInput: React.FC<DraftInputProps> = ({
     }
   };
 
+  // 快速测试功能
+  const handleQuickTest = () => {
+    const testDraft = `AI技术的发展正在深刻改变我们的工作和生活方式。从自动驾驶到智能助手，从医疗诊断到金融分析，AI已经渗透到各个领域。
+
+我认为AI最重要的价值在于：
+1. 提高效率：自动化重复性工作
+2. 增强决策：基于数据的智能分析  
+3. 拓展可能：探索人类无法触及的领域
+
+但我们也需要关注AI带来的挑战，包括就业影响、隐私保护、伦理问题等。
+
+总的来说，AI是一把双刃剑，关键在于如何正确使用和引导其发展。`;
+    
+    setDraft(testDraft);
+    setSelectedPlatform('公众号');
+  };
+
   const handleExternalSearch = () => {
     if (searchQuery.trim()) {
       onExternalSearch(searchQuery);
@@ -244,25 +261,37 @@ const DraftInput: React.FC<DraftInputProps> = ({
 
       {/* 提交按钮 */}
       <div className="text-center">
-        <button
-          onClick={handleSubmit}
-          disabled={!draft.trim() || isProcessing}
-          className="px-12 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-xl font-semibold transition-all duration-200 flex items-center gap-3 disabled:cursor-not-allowed shadow-lg hover:shadow-xl text-lg mx-auto"
-        >
-          {isProcessing ? (
-            <>
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              处理中...
-            </>
-          ) : (
-            <>
-              开始写作
-              <ArrowRight className="w-5 h-5" />
-            </>
-          )}
-        </button>
-        <p className="text-sm text-gray-500 mt-4">
-          点击后AI将分析您的草稿并生成文章大纲
+        <div className="flex items-center justify-center gap-4 mb-4">
+          {/* 快速测试按钮 */}
+          <button
+            onClick={handleQuickTest}
+            className="px-6 py-3 bg-green-100 hover:bg-green-200 text-green-700 rounded-xl font-medium transition-all duration-200 flex items-center gap-2 border border-green-300"
+          >
+            <FileText className="w-4 h-4" />
+            快速测试
+          </button>
+          
+          {/* 开始写作按钮 */}
+          <button
+            onClick={handleSubmit}
+            disabled={!draft.trim() || isProcessing}
+            className="px-12 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-xl font-semibold transition-all duration-200 flex items-center gap-3 disabled:cursor-not-allowed shadow-lg hover:shadow-xl text-lg"
+          >
+            {isProcessing ? (
+              <>
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                处理中...
+              </>
+            ) : (
+              <>
+                开始写作
+                <ArrowRight className="w-5 h-5" />
+              </>
+            )}
+          </button>
+        </div>
+        <p className="text-sm text-gray-500">
+          点击"快速测试"自动填充示例内容，或点击"开始写作"使用您的草稿
         </p>
       </div>
     </div>

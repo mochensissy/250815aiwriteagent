@@ -23,7 +23,8 @@ import {
   processEditInstruction,
   callPerplexityAPI,
   generateImagePrompts,
-  generateImage
+  generateImage,
+  callGeminiAPI
 } from '../utils/api';
 import toast from 'react-hot-toast';
 
@@ -98,45 +99,62 @@ export const useAppState = () => {
       console.log('📝 草稿长度:', draft.length);
       console.log('🎯 目标平台:', platform);
       
-      // 生成初始大纲
+      // 获取风格上下文
       const styleContext = appState.styleElements.map(e => e.description).join('; ');
       console.log('🎨 风格上下文:', styleContext || '无风格上下文');
       
-      // 生成基础大纲结构
-      const basicOutline: OutlineNode[] = [
-        {
-          id: '1',
-          title: '引言：背景介绍',
-          level: 1,
-          order: 0
-        },
-        {
-          id: '2', 
-          title: '核心观点阐述',
-          level: 1,
-          order: 1
-        },
-        {
-          id: '3',
-          title: '具体案例分析',
-          level: 1,
-          order: 2
-        },
-        {
-          id: '4',
-          title: '总结与展望',
-          level: 1,
-          order: 3
-        }
-      ];
+      // 调用AI生成大纲
+      console.log('🤖 调用AI生成个性化大纲...');
+      const { generateOutline } = await import('../utils/api');
+      const aiOutline = await generateOutline(draft, styleContext || '通用写作风格');
+      
+      // 如果AI生成失败，使用备用大纲
+      let finalOutline: OutlineNode[];
+      if (aiOutline && Array.isArray(aiOutline) && aiOutline.length > 0) {
+        console.log('✅ AI大纲生成成功，节点数量:', aiOutline.length);
+        finalOutline = aiOutline.map((node, index) => ({
+          id: String(index + 1),
+          title: node.title || `章节 ${index + 1}`,
+          level: node.level || 1,
+          order: index
+        }));
+      } else {
+        console.log('⚠️ AI大纲生成失败，使用备用大纲');
+        finalOutline = [
+          {
+            id: '1',
+            title: '引言：背景介绍',
+            level: 1,
+            order: 0
+          },
+          {
+            id: '2', 
+            title: '核心观点阐述',
+            level: 1,
+            order: 1
+          },
+          {
+            id: '3',
+            title: '具体案例分析',
+            level: 1,
+            order: 2
+          },
+          {
+            id: '4',
+            title: '总结与展望',
+            level: 1,
+            order: 3
+          }
+        ];
+      }
 
-      console.log('📋 生成基础大纲节点数量:', basicOutline.length);
+      console.log('📋 最终大纲节点数量:', finalOutline.length);
       setAppState(prev => ({
         ...prev,
         currentArticle: {
           title: '新文章',
           draft,
-          outline: basicOutline,
+          outline: finalOutline,
           content: '',
           images: []
         }
@@ -145,7 +163,25 @@ export const useAppState = () => {
       toast.success('文章大纲已生成！');
     } catch (error) {
       console.error('创作启动失败:', error);
-      toast.error('创作启动失败，请重试');
+      toast.error(`创作启动失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      
+      // 即使出错也提供基础大纲
+      const fallbackOutline: OutlineNode[] = [
+        { id: '1', title: '引言', level: 1, order: 0 },
+        { id: '2', title: '主体内容', level: 1, order: 1 },
+        { id: '3', title: '总结', level: 1, order: 2 }
+      ];
+      
+      setAppState(prev => ({
+        ...prev,
+        currentArticle: {
+          title: '新文章',
+          draft,
+          outline: fallbackOutline,
+          content: '',
+          images: []
+        }
+      }));
     } finally {
       setIsProcessing(false);
     }
@@ -196,13 +232,52 @@ ${appState.currentArticle.content}
       const styleContext = appState.styleElements.map(e => e.description).join('; ');
       console.log('🎨 风格上下文:', styleContext || '无风格上下文');
       
-      const fullContent = await generateFullArticle(
-        appState.currentArticle.outline,
-        appState.currentArticle.draft,
-        styleContext
-      );
+      let fullContent: string;
+      try {
+        console.log('🤖 调用AI生成完整文章...');
+        fullContent = await generateFullArticle(
+          appState.currentArticle.outline,
+          appState.currentArticle.draft,
+          styleContext || '通用写作风格'
+        );
+        console.log('✅ AI文章生成完成，长度:', fullContent.length);
+      } catch (aiError) {
+        console.log('⚠️ AI生成失败，使用备用模板:', aiError);
+        
+        // 生成基于大纲的模板文章
+        fullContent = `# ${appState.currentArticle.title || '我的文章'}
 
-      console.log('✅ 文章生成完成，长度:', fullContent.length);
+## 前言
+
+基于您提供的草稿内容，我为您生成了这篇文章框架。您可以在编辑器中进一步完善内容。
+
+**原始草稿：**
+${appState.currentArticle.draft}
+
+---
+
+${appState.currentArticle.outline.map(node => {
+  const prefix = node.level === 1 ? '## ' : '### ';
+  return `${prefix}${node.title}
+
+这一部分将围绕"${node.title}"展开详细论述。
+
+- 核心观点阐述
+- 具体案例分析  
+- 实用建议提供
+- 关键要点总结
+
+`;
+}).join('\n')}
+
+## 总结
+
+通过以上内容的梳理和分析，我们对这个话题有了更深入的理解。希望这篇文章能为您提供有价值的参考。
+
+---
+
+*提示：本文基于您的草稿和大纲生成，请使用编辑器功能进一步完善内容。*`;
+      }
 
       setAppState(prev => ({
         ...prev,
@@ -212,10 +287,10 @@ ${appState.currentArticle.content}
         } : undefined
       }));
 
-      toast.success('文章已生成！');
+      toast.success('文章已生成！可在编辑器中进一步完善');
     } catch (error) {
       console.error('❌ 文章生成失败:', error);
-      toast.error('文章生成失败，请重试');
+      toast.error(`文章生成失败: ${error instanceof Error ? error.message : '未知错误'}`);
     } finally {
       setIsProcessing(false);
     }
