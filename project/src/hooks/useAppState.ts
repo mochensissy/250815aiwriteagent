@@ -515,6 +515,87 @@ ${appState.currentArticle.outline.map(node => {
     });
   };
 
+  // 删除文章
+  const deleteArticle = async (articleId: string): Promise<void> => {
+    try {
+      const updatedKnowledgeBase = appState.knowledgeBase.filter(article => article.id !== articleId);
+      
+      setAppState(prev => ({
+        ...prev,
+        knowledgeBase: updatedKnowledgeBase
+      }));
+      
+      // 保存到本地存储
+      saveKnowledgeBase(updatedKnowledgeBase);
+      
+      // 如果删除的是记忆库文章，重新分析风格要素
+      const deletedArticle = appState.knowledgeBase.find(a => a.id === articleId);
+      if (deletedArticle?.category === 'memory') {
+        const remainingMemoryArticles = updatedKnowledgeBase
+          .filter(a => a.category === 'memory')
+          .map(a => a.content);
+        
+        if (remainingMemoryArticles.length > 0) {
+          console.log('🎨 重新分析记忆库风格要素...');
+          try {
+            const styleElements = await analyzeStyleElements(remainingMemoryArticles);
+            const updatedStyleElements = styleElements.map((description, index) => ({
+              id: `style_${Date.now()}_${index}`,
+              description,
+              confirmed: false,
+              createdAt: new Date()
+            }));
+            
+            setAppState(prev => ({
+              ...prev,
+              styleElements: updatedStyleElements
+            }));
+            
+            toast.success('文章已删除，风格要素已更新');
+          } catch (styleError) {
+            console.error('风格重新分析失败:', styleError);
+            toast.success('文章已删除');
+          }
+        } else {
+          // 如果没有记忆库文章了，清空风格要素
+          setAppState(prev => ({
+            ...prev,
+            styleElements: []
+          }));
+          toast.success('文章已删除，风格要素已清空');
+        }
+      } else {
+        toast.success('文章已删除');
+      }
+    } catch (error) {
+      console.error('删除文章失败:', error);
+      toast.error('删除失败，请重试');
+    }
+  };
+
+  // 更新风格要素
+  const updateStyleElement = (elementId: string, confirmed: boolean) => {
+    if (confirmed) {
+      // 确认风格要素
+      setAppState(prev => ({
+        ...prev,
+        styleElements: prev.styleElements.map(element =>
+          element.id === elementId 
+            ? { ...element, confirmed: true }
+            : element
+        )
+      }));
+      toast.success('风格要素已确认');
+    } else {
+      // 删除风格要素
+      setAppState(prev => ({
+        ...prev,
+        styleElements: prev.styleElements.filter(element => element.id !== elementId)
+      }));
+      toast.success('风格要素已删除');
+    }
+  };
+
   // 更新API配置
   const updateAPIConfig = (apiConfig: APIConfig) => {
     setAppState(prev => ({
@@ -537,6 +618,8 @@ ${appState.currentArticle.outline.map(node => {
     isProcessing,
     stylePrototypes,
     addToKnowledgeBase,
+    deleteArticle,
+    updateStyleElement,
     recommendStylePrototypesFromDraft,
     startNewArticle,
     generateArticle,

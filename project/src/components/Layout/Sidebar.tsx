@@ -7,17 +7,20 @@
 
 import React, { useState, useRef } from 'react';
 import { FileText, Upload, Tags, Palette, Settings, BookOpen, Brain, Link, X, Eye, AlertCircle, CheckCircle } from 'lucide-react';
-import { KnowledgeBaseArticle } from '../../types';
+import { KnowledgeBaseArticle, StyleElement } from '../../types';
 import { parseFile, fetchWebContent, isSupportedFileType, formatFileSize, estimateReadingTime } from '../../utils/fileParser';
 import toast from 'react-hot-toast';
 
 interface SidebarProps {
   articles: KnowledgeBaseArticle[];
+  styleElements: StyleElement[];
   onUpload: (content: string, title: string, category: 'memory' | 'case', source: 'upload' | 'paste' | 'url') => Promise<void>;
   onArticleSelect: (article: KnowledgeBaseArticle) => void;
+  onDeleteArticle: (articleId: string) => Promise<void>;
+  onStyleElementUpdate: (elementId: string, confirmed: boolean) => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ articles, onUpload, onArticleSelect }) => {
+const Sidebar: React.FC<SidebarProps> = ({ articles, styleElements, onUpload, onArticleSelect, onDeleteArticle, onStyleElementUpdate }) => {
   const [activeTab, setActiveTab] = useState<'memory' | 'case' | 'style'>('memory');
   const [showUpload, setShowUpload] = useState(false);
   const [uploadContent, setUploadContent] = useState('');
@@ -706,22 +709,43 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, onUpload, onArticleSelect }
               {memoryArticles.map((article) => (
                 <div
                   key={article.id}
-                  onClick={() => onArticleSelect(article)}
-                  className={`p-4 bg-white border rounded-xl cursor-pointer transition-all duration-200 ${
+                  className={`p-4 bg-white border rounded-xl transition-all duration-200 ${
                     isRecentlyAdded(article)
                       ? 'border-green-300 bg-green-50 shadow-md ring-2 ring-green-200'
                       : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
                   }`}
                 >
                   <div className="flex items-start justify-between mb-2">
-                    <h4 className="font-medium text-gray-900 line-clamp-1 flex-1">{article.title}</h4>
-                    {isRecentlyAdded(article) && (
-                      <span className="text-xs px-2 py-1 bg-green-600 text-white rounded-full ml-2 flex-shrink-0">
-                        新增
-                      </span>
-                    )}
+                    <h4 
+                      className="font-medium text-gray-900 line-clamp-1 flex-1 cursor-pointer hover:text-blue-600"
+                      onClick={() => onArticleSelect(article)}
+                    >
+                      {article.title}
+                    </h4>
+                    <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                      {isRecentlyAdded(article) && (
+                        <span className="text-xs px-2 py-1 bg-green-600 text-white rounded-full">
+                          新增
+                        </span>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm('确定要删除这篇文章吗？删除后会重新分析风格要素。')) {
+                            onDeleteArticle(article.id);
+                          }
+                        }}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded"
+                        title="删除文章"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-gray-600 text-sm mb-3 line-clamp-2 leading-relaxed">
+                  <p 
+                    className="text-gray-600 text-sm mb-3 line-clamp-2 leading-relaxed cursor-pointer"
+                    onClick={() => onArticleSelect(article)}
+                  >
                     {article.content.substring(0, 100)}...
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -757,20 +781,38 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, onUpload, onArticleSelect }
               {caseArticles.map((article) => (
                 <div
                   key={article.id}
-                  onClick={() => onArticleSelect(article)}
-                  className={`p-4 bg-white border rounded-xl cursor-pointer transition-all duration-200 ${
+                  className={`p-4 bg-white border rounded-xl transition-all duration-200 ${
                     isRecentlyAdded(article)
                       ? 'border-green-300 bg-green-50 shadow-md ring-2 ring-green-200'
                       : 'border-gray-200 hover:border-purple-300 hover:shadow-sm'
                   }`}
                 >
                   <div className="flex items-start justify-between mb-2">
-                    <h4 className="font-medium text-gray-900 line-clamp-1 flex-1">{article.title}</h4>
-                    {isRecentlyAdded(article) && (
-                      <span className="text-xs px-2 py-1 bg-green-600 text-white rounded-full ml-2 flex-shrink-0">
-                        新增
-                      </span>
-                    )}
+                    <h4 
+                      className="font-medium text-gray-900 line-clamp-1 flex-1 cursor-pointer hover:text-purple-600"
+                      onClick={() => onArticleSelect(article)}
+                    >
+                      {article.title}
+                    </h4>
+                    <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                      {isRecentlyAdded(article) && (
+                        <span className="text-xs px-2 py-1 bg-green-600 text-white rounded-full">
+                          新增
+                        </span>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm('确定要删除这篇案例文章吗？')) {
+                            onDeleteArticle(article.id);
+                          }
+                        }}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded"
+                        title="删除文章"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
                   <p className="text-gray-600 text-sm mb-3 line-clamp-2 leading-relaxed">
                     {article.content.substring(0, 100)}...
@@ -803,13 +845,53 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, onUpload, onArticleSelect }
             <h3 className="text-lg font-semibold text-gray-800 mb-4">写作风格设置</h3>
             
             <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl">
-              <h4 className="text-sm font-semibold mb-2 flex items-center text-blue-800">
+              <h4 className="text-sm font-semibold mb-3 flex items-center text-blue-800">
                 <Brain className="w-4 h-4 mr-2" />
-                风格要素
+                个人风格要素 ({styleElements.length})
               </h4>
-              <p className="text-blue-700 text-xs leading-relaxed">
-                上传更多作品后，AI将分析并提炼您的个人写作风格特征
-              </p>
+              
+              {styleElements.length === 0 ? (
+                <p className="text-blue-700 text-xs leading-relaxed">
+                  上传更多作品到记忆库后，AI将分析并提炼您的个人写作风格特征
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {styleElements.map((element) => (
+                    <div key={element.id} className="flex items-start justify-between p-2 bg-white rounded-lg border border-blue-200">
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-700 leading-relaxed">
+                          {element.description}
+                        </p>
+                        <div className="flex items-center mt-1">
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            element.confirmed 
+                              ? 'bg-green-100 text-green-700' 
+                              : 'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {element.confirmed ? '已确认' : '待确认'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 ml-2">
+                        {!element.confirmed && (
+                          <button
+                            onClick={() => onStyleElementUpdate(element.id, true)}
+                            className="text-xs text-green-600 hover:text-green-700 px-2 py-1 hover:bg-green-50 rounded"
+                          >
+                            确认
+                          </button>
+                        )}
+                        <button
+                          onClick={() => onStyleElementUpdate(element.id, false)}
+                          className="text-xs text-red-600 hover:text-red-700 px-2 py-1 hover:bg-red-50 rounded"
+                        >
+                          删除
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-100 rounded-xl">

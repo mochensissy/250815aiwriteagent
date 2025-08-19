@@ -24,6 +24,8 @@ function App() {
     isProcessing,
     stylePrototypes,
     addToKnowledgeBase,
+    deleteArticle,
+    updateStyleElement,
     recommendStylePrototypesFromDraft,
     startNewArticle,
     generateArticle,
@@ -145,8 +147,11 @@ function App() {
       {/* 侧边栏 */}
       <Sidebar
         articles={appState.knowledgeBase}
+        styleElements={appState.styleElements}
         onUpload={addToKnowledgeBase}
         onArticleSelect={handleArticleSelect}
+        onDeleteArticle={deleteArticle}
+        onStyleElementUpdate={updateStyleElement}
       />
 
       {/* 主内容区域 */}
