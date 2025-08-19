@@ -15,14 +15,17 @@ export interface KnowledgeBaseArticle {
   createdAt: string;
   source: 'upload' | 'paste' | 'url';
   url?: string;
+  styleElements?: StyleElement[]; // 与该文章关联的风格要素
 }
 
 // 风格要素类型
 export interface StyleElement {
   id: string;
+  articleId: string; // 关联的文章ID
   description: string;
   confirmed: boolean;
   category: 'vocabulary' | 'syntax' | 'structure' | 'rhetoric';
+  createdAt: Date;
 }
 
 // 个人术语映射
@@ -110,7 +113,6 @@ export interface AppState {
     coverImage?: GeneratedImage;
   };
   knowledgeBase: KnowledgeBaseArticle[];
-  styleElements: StyleElement[];
   termMappings: TermMapping[];
   writingRules: WritingRule[];
   selectedPrototype?: StylePrototype;

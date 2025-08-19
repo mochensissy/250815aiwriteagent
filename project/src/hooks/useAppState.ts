@@ -31,7 +31,6 @@ import toast from 'react-hot-toast';
 export const useAppState = () => {
   const [appState, setAppState] = useState<AppState>({
     knowledgeBase: [],
-    styleElements: [],
     termMappings: [],
     writingRules: [],
     apiConfig: getAPIConfig()
@@ -79,31 +78,43 @@ export const useAppState = () => {
         setAppState(prev => ({ ...prev, knowledgeBase: updatedKnowledgeBase }));
         saveKnowledgeBase(updatedKnowledgeBase);
         
-        // 如果是记忆库文章，异步更新风格要素
+        // 如果是记忆库文章，异步分析该文章的风格要素
         if (category === 'memory') {
           // 异步执行风格分析，不阻塞主流程
           setTimeout(async () => {
             try {
-              console.log('🎨 开始分析记忆库文章风格...');
-              const memoryArticles = updatedKnowledgeBase
-                .filter(a => a.category === 'memory')
-                .map(a => a.content);
+              console.log('🎨 开始分析该文章的风格要素...');
               
-              const styleElements = await analyzeStyleElements(memoryArticles);
+              const styleElements = await analyzeStyleElements([content]);
               console.log('✅ 风格分析完成，提取风格要素:', styleElements.length);
               
               if (styleElements.length > 0) {
                 const updatedStyleElements = styleElements.map((description, index) => ({
-                  id: `style_${Date.now()}_${index}`,
+                  id: `style_${newArticle.id}_${index}`,
+                  articleId: newArticle.id,
                   description,
                   confirmed: false, // 需要用户确认
-                  createdAt: new Date()
+                  createdAt: new Date(),
+                  category: 'structure' as const // 默认分类，实际应该由AI分析决定
                 }));
                 
+                // 更新该文章的风格要素
                 setAppState(prev => ({
                   ...prev,
-                  styleElements: updatedStyleElements
+                  knowledgeBase: prev.knowledgeBase.map(article => 
+                    article.id === newArticle.id 
+                      ? { ...article, styleElements: updatedStyleElements }
+                      : article
+                  )
                 }));
+                
+                // 同时保存到localStorage
+                const updatedKnowledgeBaseWithStyle = updatedKnowledgeBase.map(article => 
+                  article.id === newArticle.id 
+                    ? { ...article, styleElements: updatedStyleElements }
+                    : article
+                );
+                saveKnowledgeBase(updatedKnowledgeBaseWithStyle);
                 
                 console.log('🎨 风格要素已更新到状态');
               }
@@ -528,45 +539,8 @@ ${appState.currentArticle.outline.map(node => {
       // 保存到本地存储
       saveKnowledgeBase(updatedKnowledgeBase);
       
-      // 如果删除的是记忆库文章，重新分析风格要素
-      const deletedArticle = appState.knowledgeBase.find(a => a.id === articleId);
-      if (deletedArticle?.category === 'memory') {
-        const remainingMemoryArticles = updatedKnowledgeBase
-          .filter(a => a.category === 'memory')
-          .map(a => a.content);
-        
-        if (remainingMemoryArticles.length > 0) {
-          console.log('🎨 重新分析记忆库风格要素...');
-          try {
-            const styleElements = await analyzeStyleElements(remainingMemoryArticles);
-            const updatedStyleElements = styleElements.map((description, index) => ({
-              id: `style_${Date.now()}_${index}`,
-              description,
-              confirmed: false,
-              createdAt: new Date()
-            }));
-            
-            setAppState(prev => ({
-              ...prev,
-              styleElements: updatedStyleElements
-            }));
-            
-            toast.success('文章已删除，风格要素已更新');
-          } catch (styleError) {
-            console.error('风格重新分析失败:', styleError);
-            toast.success('文章已删除');
-          }
-        } else {
-          // 如果没有记忆库文章了，清空风格要素
-          setAppState(prev => ({
-            ...prev,
-            styleElements: []
-          }));
-          toast.success('文章已删除，风格要素已清空');
-        }
-      } else {
-        toast.success('文章已删除');
-      }
+      toast.success('文章已删除');
+      // 注意：风格要素现在直接关联到文章，删除文章时会自动删除对应的风格要素
     } catch (error) {
       console.error('删除文章失败:', error);
       toast.error('删除失败，请重试');
@@ -579,21 +553,32 @@ ${appState.currentArticle.outline.map(node => {
       // 确认风格要素
       setAppState(prev => ({
         ...prev,
-        styleElements: prev.styleElements.map(element =>
-          element.id === elementId 
-            ? { ...element, confirmed: true }
-            : element
-        )
+        knowledgeBase: prev.knowledgeBase.map(article => ({
+          ...article,
+          styleElements: article.styleElements?.map(element =>
+            element.id === elementId 
+              ? { ...element, confirmed: true }
+              : element
+          )
+        }))
       }));
       toast.success('风格要素已确认');
     } else {
       // 删除风格要素
       setAppState(prev => ({
         ...prev,
-        styleElements: prev.styleElements.filter(element => element.id !== elementId)
+        knowledgeBase: prev.knowledgeBase.map(article => ({
+          ...article,
+          styleElements: article.styleElements?.filter(element => element.id !== elementId)
+        }))
       }));
       toast.success('风格要素已删除');
     }
+    
+    // 保存更新后的知识库
+    setTimeout(() => {
+      saveKnowledgeBase(appState.knowledgeBase);
+    }, 100);
   };
 
   // 更新API配置

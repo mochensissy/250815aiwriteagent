@@ -147,7 +147,6 @@ function App() {
       {/* 侧边栏 */}
       <Sidebar
         articles={appState.knowledgeBase}
-        styleElements={appState.styleElements}
         onUpload={addToKnowledgeBase}
         onArticleSelect={handleArticleSelect}
         onDeleteArticle={deleteArticle}

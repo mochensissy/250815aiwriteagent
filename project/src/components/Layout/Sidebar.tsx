@@ -13,14 +13,13 @@ import toast from 'react-hot-toast';
 
 interface SidebarProps {
   articles: KnowledgeBaseArticle[];
-  styleElements: StyleElement[];
   onUpload: (content: string, title: string, category: 'memory' | 'case', source: 'upload' | 'paste' | 'url') => Promise<void>;
   onArticleSelect: (article: KnowledgeBaseArticle) => void;
   onDeleteArticle: (articleId: string) => Promise<void>;
   onStyleElementUpdate: (elementId: string, confirmed: boolean) => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ articles, styleElements, onUpload, onArticleSelect, onDeleteArticle, onStyleElementUpdate }) => {
+const Sidebar: React.FC<SidebarProps> = ({ articles, onUpload, onArticleSelect, onDeleteArticle, onStyleElementUpdate }) => {
   const [activeTab, setActiveTab] = useState<'memory' | 'case' | 'style'>('memory');
   const [showUpload, setShowUpload] = useState(false);
   const [uploadContent, setUploadContent] = useState('');
@@ -317,6 +316,11 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, styleElements, onUpload, on
   const memoryArticles = articles.filter(a => a.category === 'memory');
   const caseArticles = articles.filter(a => a.category === 'case');
   
+  // 计算所有风格要素
+  const allStyleElements = memoryArticles
+    .flatMap(article => article.styleElements || [])
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  
   // 检查是否是最近添加的文章（5秒内）
   const isRecentlyAdded = (article: KnowledgeBaseArticle) => {
     const createdTime = new Date(article.createdAt).getTime();
@@ -369,6 +373,17 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, styleElements, onUpload, on
             <BookOpen className="w-4 h-4 mr-2" />
             案例库
           </button>
+          <button
+            onClick={() => setActiveTab('style')}
+            className={`flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'style' 
+                ? 'bg-white text-orange-600 shadow-sm' 
+                : 'text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            <Palette className="w-4 h-4 mr-2" />
+            风格设置
+          </button>
         </div>
       </div>
 
@@ -378,7 +393,9 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, styleElements, onUpload, on
           <p className="text-sm text-blue-800 leading-relaxed">
             {activeTab === 'memory' 
               ? '上传您的得意之作和具有明显个人特点的文章。AI将从中提炼您的个人写作风格，用于后续创作。'
-              : '上传您认为优秀的文章作为参考案例。AI将学习这些文章的写作技巧和风格特点，帮助您创作出更好的内容。'
+              : activeTab === 'case'
+              ? '上传您认为优秀的文章作为参考案例。AI将学习这些文章的写作技巧和风格特点，帮助您创作出更好的内容。'
+              : '管理从您的个人作品中提取的风格要素。您可以确认有用的风格特征，删除不准确的内容，以优化AI的写作风格。'
             }
           </p>
         </div>
@@ -847,28 +864,31 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, styleElements, onUpload, on
             <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl">
               <h4 className="text-sm font-semibold mb-3 flex items-center text-blue-800">
                 <Brain className="w-4 h-4 mr-2" />
-                个人风格要素 ({styleElements.length})
+                个人风格要素 ({allStyleElements.length})
               </h4>
               
-              {styleElements.length === 0 ? (
+              {allStyleElements.length === 0 ? (
                 <p className="text-blue-700 text-xs leading-relaxed">
                   上传更多作品到记忆库后，AI将分析并提炼您的个人写作风格特征
                 </p>
               ) : (
                 <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {styleElements.map((element) => (
+                  {allStyleElements.map((element) => (
                     <div key={element.id} className="flex items-start justify-between p-2 bg-white rounded-lg border border-blue-200">
                       <div className="flex-1">
                         <p className="text-xs text-gray-700 leading-relaxed">
                           {element.description}
                         </p>
-                        <div className="flex items-center mt-1">
+                        <div className="flex items-center mt-1 gap-2">
                           <span className={`text-xs px-2 py-0.5 rounded-full ${
                             element.confirmed 
                               ? 'bg-green-100 text-green-700' 
                               : 'bg-yellow-100 text-yellow-700'
                           }`}>
                             {element.confirmed ? '已确认' : '待确认'}
+                          </span>
+                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                            来源: {memoryArticles.find(a => a.id === element.articleId)?.title?.substring(0, 10) || '未知'}...
                           </span>
                         </div>
                       </div>
