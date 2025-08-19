@@ -61,9 +61,10 @@ export interface StylePrototype {
 
 // 编辑建议类型
 export interface EditSuggestion {
-  type: 'polish' | 'expand' | 'shorten' | 'tone';
+  type: 'polish' | 'expand' | 'shorten' | 'tone' | 'professional' | 'casual';
   label: string;
   icon: string;
+  description?: string;
 }
 
 // 生成图片结果
@@ -72,6 +73,30 @@ export interface GeneratedImage {
   url: string;
   prompt: string;
   position?: number; // 在文章中的位置
+}
+
+// API配置相关类型
+export interface APIConfig {
+  gemini: {
+    apiKey: string;
+    endpoint: string;
+    model: string;
+  };
+  perplexity: {
+    apiKey: string;
+    endpoint: string;
+  };
+  doubao: {
+    apiKey: string;
+    endpoint: string;
+    model: string;
+  };
+}
+
+export interface APITestResult {
+  success: boolean;
+  message: string;
+  responseTime?: number;
 }
 
 // 应用状态类型
@@ -89,4 +114,5 @@ export interface AppState {
   termMappings: TermMapping[];
   writingRules: WritingRule[];
   selectedPrototype?: StylePrototype;
+  apiConfig: APIConfig;
 }

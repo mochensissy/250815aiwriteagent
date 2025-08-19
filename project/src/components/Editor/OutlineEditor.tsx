@@ -6,7 +6,7 @@
  * 新增外部搜索增强功能
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   DndContext, 
   closestCenter, 
@@ -26,8 +26,9 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Plus, GripVertical, Edit2, Trash2, FileText, Search, Globe, CheckCircle, X } from 'lucide-react';
+import { Plus, GripVertical, Edit2, Trash2, FileText, Search, Globe, CheckCircle, X, Copy, MoveUp, MoveDown, ChevronDown, ChevronRight } from 'lucide-react';
 import { OutlineNode } from '../../types';
+import toast from 'react-hot-toast';
 
 interface OutlineEditorProps {
   outline: OutlineNode[];
@@ -49,9 +50,16 @@ const SortableOutlineItem: React.FC<{
   node: OutlineNode;
   onEdit: (id: string, title: string) => void;
   onDelete: (id: string) => void;
-}> = ({ node, onEdit, onDelete }) => {
+  onDuplicate: (id: string) => void;
+  onMoveUp: (id: string) => void;
+  onMoveDown: (id: string) => void;
+  onToggleLevel: (id: string) => void;
+  isFirst: boolean;
+  isLast: boolean;
+}> = ({ node, onEdit, onDelete, onDuplicate, onMoveUp, onMoveDown, onToggleLevel, isFirst, isLast }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(node.title);
+  const [showActions, setShowActions] = useState(false);
 
   const {
     attributes,
@@ -69,7 +77,10 @@ const SortableOutlineItem: React.FC<{
   };
 
   const handleSaveEdit = () => {
-    onEdit(node.id, editTitle);
+    if (editTitle.trim() !== node.title) {
+      onEdit(node.id, editTitle.trim());
+      toast.success('大纲节点已更新');
+    }
     setIsEditing(false);
   };
 
@@ -82,11 +93,32 @@ const SortableOutlineItem: React.FC<{
     }
   };
 
+  const handleDelete = () => {
+    if (window.confirm('确定要删除这个大纲节点吗？')) {
+      onDelete(node.id);
+      toast.success('大纲节点已删除');
+    }
+  };
+
+  const handleDuplicate = () => {
+    onDuplicate(node.id);
+    toast.success('大纲节点已复制');
+  };
+
+  // 层级指示器
+  const levelIndicator = node.level === 1 ? 
+    <ChevronRight className="w-4 h-4 text-blue-500" /> : 
+    <ChevronDown className="w-4 h-4 text-green-500" />;
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-3 p-4 bg-white rounded-xl hover:shadow-sm transition-all group border border-gray-100 hover:border-gray-200"
+      className={`flex items-center gap-3 p-4 bg-white rounded-xl hover:shadow-sm transition-all group border ${
+        isDragging ? 'border-blue-300 shadow-lg' : 'border-gray-100 hover:border-gray-200'
+      } ${node.level === 2 ? 'ml-6 bg-gray-50' : ''}`}
+      onMouseEnter={() => setShowActions(true)}
+      onMouseLeave={() => setShowActions(false)}
     >
       <div
         {...attributes}
@@ -94,6 +126,11 @@ const SortableOutlineItem: React.FC<{
         className="cursor-grab hover:cursor-grabbing text-gray-400 hover:text-gray-600 transition-colors"
       >
         <GripVertical className="w-4 h-4" />
+      </div>
+      
+      {/* 层级指示器 */}
+      <div className="flex items-center">
+        {levelIndicator}
       </div>
       
       <div className="flex-1">
@@ -104,29 +141,80 @@ const SortableOutlineItem: React.FC<{
             onChange={(e) => setEditTitle(e.target.value)}
             onBlur={handleSaveEdit}
             onKeyDown={handleKeyPress}
-            className="w-full bg-gray-50 text-gray-800 px-3 py-2 rounded-lg border border-gray-200 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            className="w-full bg-white text-gray-800 px-3 py-2 rounded-lg border border-blue-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
             autoFocus
           />
         ) : (
-          <span 
-            className={`${node.level === 1 ? 'font-semibold text-gray-900' : 'text-gray-700'} cursor-pointer hover:text-blue-600 transition-colors`}
+          <div 
+            className="cursor-pointer hover:text-blue-600 transition-colors group-hover:bg-blue-50 px-2 py-1 rounded"
             onClick={() => setIsEditing(true)}
           >
-            {node.level === 2 && '  '}{node.title}
-          </span>
+            <span className={`${node.level === 1 ? 'font-semibold text-gray-900 text-base' : 'text-gray-700 text-sm'}`}>
+              {node.title}
+            </span>
+            {node.content && (
+              <p className="text-xs text-gray-500 mt-1 line-clamp-2">{node.content}</p>
+            )}
+          </div>
         )}
       </div>
 
-      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      {/* 操作按钮 */}
+      <div className={`flex gap-1 transition-opacity ${showActions || isEditing ? 'opacity-100' : 'opacity-0'}`}>
+        {/* 层级切换 */}
+        <button
+          onClick={() => onToggleLevel(node.id)}
+          className="p-2 text-gray-400 hover:text-purple-500 hover:bg-purple-50 rounded-lg transition-colors"
+          title={node.level === 1 ? '设为子标题' : '设为主标题'}
+        >
+          {node.level === 1 ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+        </button>
+        
+        {/* 向上移动 */}
+        {!isFirst && (
+          <button
+            onClick={() => onMoveUp(node.id)}
+            className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+            title="向上移动"
+          >
+            <MoveUp className="w-3 h-3" />
+          </button>
+        )}
+        
+        {/* 向下移动 */}
+        {!isLast && (
+          <button
+            onClick={() => onMoveDown(node.id)}
+            className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+            title="向下移动"
+          >
+            <MoveDown className="w-3 h-3" />
+          </button>
+        )}
+        
+        {/* 复制 */}
+        <button
+          onClick={handleDuplicate}
+          className="p-2 text-gray-400 hover:text-green-500 hover:bg-green-50 rounded-lg transition-colors"
+          title="复制节点"
+        >
+          <Copy className="w-3 h-3" />
+        </button>
+        
+        {/* 编辑 */}
         <button
           onClick={() => setIsEditing(true)}
           className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+          title="编辑"
         >
           <Edit2 className="w-3 h-3" />
         </button>
+        
+        {/* 删除 */}
         <button
-          onClick={() => onDelete(node.id)}
+          onClick={handleDelete}
           className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+          title="删除"
         >
           <Trash2 className="w-3 h-3" />
         </button>
@@ -181,6 +269,60 @@ const OutlineEditor: React.FC<OutlineEditorProps> = ({
 
   const handleDeleteNode = (id: string) => {
     const newOutline = outline.filter(node => node.id !== id);
+    onChange(newOutline);
+  };
+
+  const handleDuplicateNode = (id: string) => {
+    const nodeIndex = outline.findIndex(node => node.id === id);
+    if (nodeIndex === -1) return;
+    
+    const originalNode = outline[nodeIndex];
+    const duplicatedNode: OutlineNode = {
+      ...originalNode,
+      id: Date.now().toString(),
+      title: originalNode.title + ' (副本)',
+      order: nodeIndex + 1
+    };
+    
+    const newOutline = [...outline];
+    newOutline.splice(nodeIndex + 1, 0, duplicatedNode);
+    
+    // 重新排序
+    newOutline.forEach((node, index) => {
+      node.order = index;
+    });
+    
+    onChange(newOutline);
+  };
+
+  const handleMoveUp = (id: string) => {
+    const index = outline.findIndex(node => node.id === id);
+    if (index <= 0) return;
+    
+    const newOutline = arrayMove(outline, index, index - 1).map((item, idx) => ({
+      ...item,
+      order: idx
+    }));
+    
+    onChange(newOutline);
+  };
+
+  const handleMoveDown = (id: string) => {
+    const index = outline.findIndex(node => node.id === id);
+    if (index >= outline.length - 1) return;
+    
+    const newOutline = arrayMove(outline, index, index + 1).map((item, idx) => ({
+      ...item,
+      order: idx
+    }));
+    
+    onChange(newOutline);
+  };
+
+  const handleToggleLevel = (id: string) => {
+    const newOutline = outline.map(node => 
+      node.id === id ? { ...node, level: node.level === 1 ? 2 : 1 } : node
+    );
     onChange(newOutline);
   };
 
@@ -248,11 +390,36 @@ const OutlineEditor: React.FC<OutlineEditorProps> = ({
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 mb-8">
       <div className="flex items-center justify-between mb-6">
-        <h3 className="text-2xl font-bold text-gray-900 flex items-center">
-          <FileText className="w-6 h-6 mr-3 text-blue-500" />
-          文章大纲
-        </h3>
+        <div>
+          <h3 className="text-2xl font-bold text-gray-900 flex items-center">
+            <FileText className="w-6 h-6 mr-3 text-blue-500" />
+            文章大纲
+          </h3>
+          {outline.length > 0 && (
+            <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
+              <span>共 {outline.length} 个节点</span>
+              <span>主标题 {outline.filter(n => n.level === 1).length} 个</span>
+              <span>子标题 {outline.filter(n => n.level === 2).length} 个</span>
+            </div>
+          )}
+        </div>
         <div className="flex gap-3">
+          {outline.length > 0 && (
+            <button
+              onClick={() => {
+                const outlineText = outline.map(node => 
+                  `${'#'.repeat(node.level)} ${node.title}`
+                ).join('\n');
+                navigator.clipboard.writeText(outlineText);
+                toast.success('大纲已复制到剪贴板');
+              }}
+              className="px-4 py-2 text-gray-600 hover:text-gray-700 hover:bg-gray-50 rounded-xl transition-colors flex items-center gap-2 border border-gray-200 hover:border-gray-300"
+              title="复制大纲到剪贴板"
+            >
+              <Copy className="w-4 h-4" />
+              复制大纲
+            </button>
+          )}
           <button
             onClick={() => setShowExternalSearch(true)}
             className="px-4 py-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl transition-colors flex items-center gap-2 border border-blue-200 hover:border-blue-300"
@@ -263,6 +430,7 @@ const OutlineEditor: React.FC<OutlineEditorProps> = ({
           <button
             onClick={() => setShowAddNode(true)}
             className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors"
+            title="添加新节点"
           >
             <Plus className="w-5 h-5" />
           </button>
@@ -375,12 +543,18 @@ const OutlineEditor: React.FC<OutlineEditorProps> = ({
       >
         <SortableContext items={outline.map(node => node.id)} strategy={verticalListSortingStrategy}>
           <div className="space-y-3 mb-8">
-            {outline.map((node) => (
+            {outline.map((node, index) => (
               <SortableOutlineItem
                 key={node.id}
                 node={node}
                 onEdit={handleEditNode}
                 onDelete={handleDeleteNode}
+                onDuplicate={handleDuplicateNode}
+                onMoveUp={handleMoveUp}
+                onMoveDown={handleMoveDown}
+                onToggleLevel={handleToggleLevel}
+                isFirst={index === 0}
+                isLast={index === outline.length - 1}
               />
             ))}
           </div>

@@ -6,12 +6,14 @@
  */
 
 import React, { useState, useRef } from 'react';
-import { FileText, Upload, Tags, Palette, Settings, BookOpen, Brain, Link, X, Eye, AlertCircle } from 'lucide-react';
+import { FileText, Upload, Tags, Palette, Settings, BookOpen, Brain, Link, X, Eye, AlertCircle, CheckCircle } from 'lucide-react';
 import { KnowledgeBaseArticle } from '../../types';
+import { parseFile, fetchWebContent, isSupportedFileType, formatFileSize, estimateReadingTime } from '../../utils/fileParser';
+import toast from 'react-hot-toast';
 
 interface SidebarProps {
   articles: KnowledgeBaseArticle[];
-  onUpload: (content: string, title: string, category: 'memory' | 'case', source: 'upload' | 'paste' | 'url') => void;
+  onUpload: (content: string, title: string, category: 'memory' | 'case', source: 'upload' | 'paste' | 'url') => Promise<void>;
   onArticleSelect: (article: KnowledgeBaseArticle) => void;
 }
 
@@ -21,35 +23,80 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, onUpload, onArticleSelect }
   const [uploadContent, setUploadContent] = useState('');
   const [uploadUrl, setUploadUrl] = useState('');
   const [previewContent, setPreviewContent] = useState('');
+  const [extractedTitle, setExtractedTitle] = useState(''); // 存储从文件/URL中提取的标题
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [uploadedArticle, setUploadedArticle] = useState<{title: string, category: string} | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 处理文件读取
   const handleFileRead = async (file: File) => {
+    // 检查文件大小限制（50MB）
+    const maxSize = 50 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast.error('文件过大，请选择小于50MB的文件');
+      return;
+    }
+
+    // 检查文件类型是否支持
+    if (!isSupportedFileType(file)) {
+      toast.error('不支持的文件格式。支持的格式：PDF、Word、Markdown、TXT');
+      return;
+    }
+
     setIsProcessing(true);
     
     try {
-      let content = '';
+      toast.loading('正在解析文件...', { id: 'file-parsing' });
       
-      if (file.type === 'text/plain' || file.name.endsWith('.txt') || file.name.endsWith('.md')) {
-        // 文本文件直接读取
-        content = await file.text();
-      } else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-        // PDF文件模拟解析（实际项目中需要PDF解析库）
-        content = `PDF文件内容解析：${file.name}\n\n这是一个PDF文件的模拟解析内容。在实际应用中，这里会调用PDF解析API来提取文本内容。\n\n文件大小：${(file.size / 1024).toFixed(2)} KB\n创建时间：${new Date(file.lastModified).toLocaleString()}`;
-      } else if (file.type.includes('word') || file.name.endsWith('.docx')) {
-        // Word文档模拟解析
-        content = `Word文档内容解析：${file.name}\n\n这是一个Word文档的模拟解析内容。在实际应用中，这里会调用文档解析API来提取文本内容。\n\n文件大小：${(file.size / 1024).toFixed(2)} KB\n创建时间：${new Date(file.lastModified).toLocaleString()}`;
-      } else {
-        throw new Error('不支持的文件格式');
+      const result = await parseFile(file);
+      
+      // 检查解析结果
+      if (!result.content || result.content.trim().length < 10) {
+        throw new Error('文件内容为空或过短，请检查文件是否有效');
       }
       
-      setUploadContent(content);
-      setPreviewContent(content);
+      // 构建预览内容，包含元数据
+      const metadata = result.metadata;
+      let previewText = result.content;
+      
+      if (metadata) {
+        const metadataText = [
+          `📄 文件名: ${file.name}`,
+          `📊 字数统计: ${metadata.wordCount || 0} 字`,
+          `📏 文件大小: ${formatFileSize(metadata.fileSize || 0)}`,
+          `⏱️ 预计阅读: ${estimateReadingTime(metadata.wordCount || 0)}`,
+          metadata.pageCount ? `📖 页数: ${metadata.pageCount} 页` : '',
+          metadata.lastModified ? `📅 修改时间: ${metadata.lastModified.toLocaleString()}` : '',
+          '---'
+        ].filter(Boolean).join('\n');
+        
+        previewText = `${metadataText}\n\n${result.content}`;
+      }
+      
+      setUploadContent(result.content);
+      setPreviewContent(previewText);
+      setExtractedTitle(result.title || ''); // 保存提取的标题
+      
+      console.log('文件解析完成:', {
+        title: result.title,
+        contentLength: result.content.length,
+        previewLength: previewText.length,
+        hasContent: !!previewText.trim()
+      });
+      
+      toast.success(`文件解析成功！提取了 ${metadata?.wordCount || 0} 字内容`, { id: 'file-parsing' });
     } catch (error) {
       console.error('文件读取失败:', error);
-      alert('文件读取失败，请检查文件格式');
+      const errorMessage = error instanceof Error ? error.message : '文件读取失败，请检查文件格式';
+      toast.error(errorMessage, { id: 'file-parsing' });
+      
+      // 清理状态
+      setUploadContent('');
+      setPreviewContent('');
+      setExtractedTitle('');
     } finally {
       setIsProcessing(false);
     }
@@ -86,17 +133,71 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, onUpload, onArticleSelect }
 
   // 处理URL获取
   const handleUrlFetch = async () => {
-    if (!uploadUrl) return;
+    if (!uploadUrl.trim()) return;
+    
+    // 基本URL格式验证
+    try {
+      new URL(uploadUrl);
+    } catch {
+      toast.error('请输入有效的URL地址');
+      return;
+    }
     
     setIsProcessing(true);
     try {
-      // 模拟URL获取内容
-      const mockContent = `从URL获取的内容: ${uploadUrl}\n\n这是一篇关于技术发展的文章，讨论了人工智能在现代社会中的应用和影响。文章深入分析了AI技术的发展趋势，以及它对各个行业带来的变革。\n\n主要观点包括：\n1. AI技术正在快速发展\n2. 各行业都在积极拥抱AI\n3. 需要关注AI发展带来的挑战\n4. 未来AI将更加普及和智能化`;
-      setUploadContent(mockContent);
-      setPreviewContent(mockContent);
+      const result = await fetchWebContent(uploadUrl);
+      
+      // 构建预览内容，包含元数据
+      const metadata = result.metadata;
+      let previewText = result.content;
+      
+      if (metadata) {
+        const metadataText = [
+          `🌐 来源: ${uploadUrl}`,
+          `📊 字数统计: ${metadata.wordCount || 0} 字`,
+          `⏱️ 预计阅读: ${estimateReadingTime(metadata.wordCount || 0)}`,
+          `📅 获取时间: ${new Date().toLocaleString()}`,
+          '---'
+        ].join('\n');
+        
+        previewText = `${metadataText}\n\n${result.content}`;
+      }
+      
+      setUploadContent(result.content);
+      setPreviewContent(previewText);
+      setExtractedTitle(result.title || ''); // 保存提取的标题
+      
+      console.log('URL解析完成:', {
+        title: result.title,
+        contentLength: result.content.length,
+        url: uploadUrl
+      });
+      
+      toast.success(`网页内容获取成功！提取了 ${metadata?.wordCount || 0} 字内容`);
     } catch (error) {
       console.error('URL获取失败:', error);
-      alert('URL获取失败，请检查网址是否正确');
+      const errorMessage = error instanceof Error ? error.message : 'URL获取失败，请检查网址是否正确';
+      
+      // 为微信公众号链接提供特殊处理
+      if (uploadUrl.includes('mp.weixin.qq.com')) {
+        // 显示更详细的错误信息，包含操作指引
+        toast.error(
+          errorMessage.length > 200 ? errorMessage : 
+          '微信公众号链接解析失败。建议：1. 复制文章内容直接粘贴 2. 保存为PDF后上传',
+          { 
+            duration: 8000,
+            style: {
+              maxWidth: '500px',
+              fontSize: '14px'
+            }
+          }
+        );
+        
+        // 自动切换到内容预览标签，方便用户粘贴
+        setActiveTab('memory');
+      } else {
+        toast.error(errorMessage, { duration: 5000 });
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -106,25 +207,110 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, onUpload, onArticleSelect }
   const handleContentPaste = (content: string) => {
     setUploadContent(content);
     setPreviewContent(content);
+    setExtractedTitle(''); // 粘贴内容时清空提取的标题，使用智能生成
+    
+    // 如果内容不为空，短暂延迟后滚动到底部显示确认按钮
+    if (content.trim()) {
+      setTimeout(() => {
+        const modal = document.querySelector('.upload-modal');
+        if (modal) {
+          modal.scrollTop = modal.scrollHeight;
+        }
+      }, 100);
+    }
   };
 
   // 提交上传
-  const handleSubmitUpload = () => {
-    if (uploadContent) {
-      // AI自动生成标题
-      const lines = uploadContent.split('\n').filter(line => line.trim());
-      const autoTitle = lines[0]?.substring(0, 30).replace(/[^\w\s\u4e00-\u9fff]/g, '').trim() + '...' || '未命名文章';
+  const handleSubmitUpload = async () => {
+    if (!uploadContent.trim()) {
+      toast.error('请添加内容后再提交');
+      return;
+    }
+    
+    setIsUploading(true);
+    setUploadSuccess(false);
+    
+    try {
+      // 优先使用提取的标题，否则智能生成标题
+      let autoTitle = extractedTitle || '未命名文章';
       
-      onUpload(uploadContent, autoTitle, activeTab as 'memory' | 'case', 'paste');
-      setUploadContent('');
-      setUploadUrl('');
-      setPreviewContent('');
-      setShowUpload(false);
+      // 如果没有提取的标题，尝试从内容中生成
+      if (!extractedTitle) {
+        const lines = uploadContent.split('\n').filter(line => line.trim());
+        
+        // 尝试从内容中提取标题
+        for (const line of lines) {
+          const trimmedLine = line.trim();
+          if (trimmedLine.length > 5 && trimmedLine.length <= 100) {
+            // 去除markdown标记
+            autoTitle = trimmedLine
+              .replace(/^#+\s*/, '') // 去除markdown标题标记
+              .replace(/[*_`]/g, '') // 去除markdown格式标记
+              .replace(/^[0-9]+\.\s*/, '') // 去除数字列表标记
+              .trim();
+            break;
+          }
+        }
+      }
+      
+      // 如果标题太长，截断并添加省略号
+      if (autoTitle.length > 50) {
+        autoTitle = autoTitle.substring(0, 47) + '...';
+      }
+      
+      const sourceType = uploadUrl ? 'url' : 'paste';
+      
+      // 等待上传完成
+      await onUpload(uploadContent, autoTitle, activeTab as 'memory' | 'case', sourceType);
+      
+      // 设置成功状态
+      setUploadSuccess(true);
+      setUploadedArticle({
+        title: autoTitle,
+        category: activeTab === 'memory' ? '记忆库' : '案例库'
+      });
+      
+      toast.success(`成功添加到${activeTab === 'memory' ? '记忆库' : '案例库'}！`);
+      
+      // 3秒后自动关闭并清理状态
+      setTimeout(() => {
+        setUploadContent('');
+        setUploadUrl('');
+        setPreviewContent('');
+        setExtractedTitle('');
+        setUploadSuccess(false);
+        setUploadedArticle(null);
+        setShowUpload(false);
+      }, 3000);
+      
+    } catch (error) {
+      console.error('提交失败:', error);
+      toast.error('提交失败，请重试');
+      setUploadSuccess(false);
+    } finally {
+      setIsUploading(false);
     }
   };
 
   const memoryArticles = articles.filter(a => a.category === 'memory');
   const caseArticles = articles.filter(a => a.category === 'case');
+  
+  // 检查是否是最近添加的文章（5秒内）
+  const isRecentlyAdded = (article: KnowledgeBaseArticle) => {
+    const createdTime = new Date(article.createdAt).getTime();
+    const now = Date.now();
+    return now - createdTime < 5000; // 5秒内
+  };
+
+  // 定期更新以移除高亮效果
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      // 强制重新渲染以更新高亮状态
+      // 这里不需要显式的状态更新，组件会自动重新计算 isRecentlyAdded
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [articles]);
 
   return (
     <div className="w-80 bg-white border-r border-gray-200 h-screen overflow-y-auto">
@@ -192,7 +378,7 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, onUpload, onArticleSelect }
       {/* 上传模态框 */}
       {showUpload && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl w-[900px] max-h-[80vh] overflow-hidden shadow-2xl">
+          <div className="upload-modal bg-white rounded-2xl w-[900px] h-[80vh] flex flex-col overflow-hidden shadow-2xl">
             {/* 模态框头部 */}
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
               <h3 className="text-xl font-semibold text-gray-900">
@@ -206,10 +392,66 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, onUpload, onArticleSelect }
               </button>
             </div>
 
-            <div className="flex h-[600px]">
+            <div className="flex flex-1 min-h-0">
+              {/* 上传成功确认页面 */}
+              {uploadSuccess && uploadedArticle ? (
+                <div className="w-full p-8 flex flex-col items-center justify-center text-center bg-gradient-to-br from-green-50 to-blue-50">
+                  <div className="mb-6">
+                    <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-4 mx-auto">
+                      <CheckCircle className="w-10 h-10 text-green-600" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-gray-900 mb-2">上传成功！</h3>
+                    <p className="text-gray-600 text-lg">
+                      文章已成功添加到您的{uploadedArticle.category}
+                    </p>
+                  </div>
+                  
+                  <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 max-w-md w-full mb-8">
+                    <div className="flex items-center mb-3">
+                      <FileText className="w-5 h-5 text-blue-600 mr-3" />
+                      <span className="text-sm font-medium text-gray-700">文章标题</span>
+                    </div>
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                      {uploadedArticle.title}
+                    </h4>
+                    
+                    <div className="flex items-center text-sm text-gray-600">
+                      <div className="flex items-center mr-4">
+                        <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                        已保存
+                      </div>
+                      <div className="flex items-center">
+                        <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
+                          {uploadedArticle.category}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="text-sm text-gray-500 mb-4">
+                    页面将在几秒后自动关闭，或点击下方按钮手动关闭
+                  </div>
+                  
+                  <button
+                    onClick={() => {
+                      setUploadContent('');
+                      setUploadUrl('');
+                      setPreviewContent('');
+                      setExtractedTitle('');
+                      setUploadSuccess(false);
+                      setUploadedArticle(null);
+                      setShowUpload(false);
+                    }}
+                    className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+                  >
+                    完成
+                  </button>
+                </div>
+              ) : (
+                <>
               {/* 左侧上传区域 */}
-              <div className="w-1/2 p-6 border-r border-gray-100">
-                <div className="space-y-6">
+              <div className="w-1/2 p-6 border-r border-gray-100 flex flex-col">
+                <div className="space-y-6 flex-1 overflow-y-auto">
                   {/* 文件上传 */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -265,6 +507,21 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, onUpload, onArticleSelect }
                         {isProcessing ? '获取中...' : '获取'}
                       </button>
                     </div>
+                    
+                    {/* 微信公众号特别提示 */}
+                    {uploadUrl.includes('mp.weixin.qq.com') && (
+                      <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                        <div className="flex items-start space-x-2">
+                          <div className="text-amber-600 mt-0.5 text-sm">💡</div>
+                          <div className="text-amber-700 text-sm">
+                            <p className="font-medium mb-1">微信公众号文章提示：</p>
+                            <p className="text-xs leading-relaxed">
+                              由于访问限制，解析可能失败。建议手动复制文章内容到下方"直接粘贴内容"区域，或保存为PDF上传。
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* 直接粘贴 */}
@@ -275,7 +532,7 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, onUpload, onArticleSelect }
                     <textarea
                       value={uploadContent}
                       onChange={(e) => handleContentPaste(e.target.value)}
-                      className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all resize-none"
+                      className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all resize-none"
                       placeholder="粘贴文章内容..."
                     />
                   </div>
@@ -283,12 +540,47 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, onUpload, onArticleSelect }
                   {/* 处理进度 */}
                   {isProcessing && (
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <div className="flex items-center">
-                        <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-3"></div>
-                        <span className="text-sm text-blue-800">正在处理文件内容...</span>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center">
+                          <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-3"></div>
+                          <span className="text-sm text-blue-800 font-medium">
+                            {uploadUrl ? '正在获取网页内容' : '正在解析文件内容'}
+                          </span>
+                        </div>
+                        <span className="text-xs text-blue-600">处理中...</span>
                       </div>
-                      <div className="mt-2 bg-blue-200 rounded-full h-2">
-                        <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{width: '60%'}}></div>
+                      
+                      {/* 进度条 */}
+                      <div className="mb-3">
+                        <div className="bg-blue-200 rounded-full h-2.5 overflow-hidden">
+                          <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-full rounded-full animate-pulse transition-all duration-1000" 
+                               style={{width: '75%'}}></div>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-1">
+                        <div className="text-xs text-blue-700 flex items-center">
+                          <CheckCircle className="w-3 h-3 mr-2 text-green-600" />
+                          文件读取完成
+                        </div>
+                        <div className="text-xs text-blue-700 flex items-center">
+                          <div className="w-3 h-3 border border-blue-600 border-t-transparent rounded-full animate-spin mr-2"></div>
+                          {uploadUrl ? '分析网页结构中...' : '提取文本内容中...'}
+                        </div>
+                        <div className="text-xs text-gray-500 flex items-center">
+                          <div className="w-3 h-3 border border-gray-300 rounded-full mr-2"></div>
+                          生成预览内容
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 成功提示 */}
+                  {previewContent && !isProcessing && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <div className="flex items-center">
+                        <CheckCircle className="w-4 h-4 text-green-600 mr-2" />
+                        <span className="text-sm text-green-800">内容解析完成，可以在右侧预览</span>
                       </div>
                     </div>
                   )}
@@ -296,12 +588,12 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, onUpload, onArticleSelect }
               </div>
 
               {/* 右侧预览区域 */}
-              <div className="w-1/2 p-6 bg-gray-50">
+              <div className="w-1/2 p-6 bg-gray-50 flex flex-col">
                 <div className="flex items-center mb-3">
                   <Eye className="w-4 h-4 text-gray-500 mr-2" />
                   <span className="text-sm font-medium text-gray-700">内容预览</span>
                 </div>
-                <div className="bg-white border border-gray-200 rounded-lg p-4 h-full overflow-y-auto">
+                <div className="bg-white border border-gray-200 rounded-lg p-4 flex-1 overflow-y-auto">
                   {previewContent ? (
                     <div className="prose prose-sm max-w-none">
                       <pre className="whitespace-pre-wrap text-sm text-gray-700 leading-relaxed font-sans">
@@ -318,29 +610,67 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, onUpload, onArticleSelect }
                   )}
                 </div>
               </div>
+                </>
+              )}
             </div>
 
-            {/* 模态框底部 */}
-            <div className="flex justify-end gap-3 p-6 border-t border-gray-100 bg-gray-50">
-              <button
-                onClick={() => {
-                  setShowUpload(false);
-                  setUploadContent('');
-                  setUploadUrl('');
-                  setPreviewContent('');
-                }}
-                className="px-6 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors font-medium"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleSubmitUpload}
-                disabled={!previewContent.trim() || isProcessing}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
-              >
-                {isProcessing ? '添加中...' : '确认添加'}
-              </button>
+            {/* 模态框底部 - 只在非成功状态下显示 */}
+            {!uploadSuccess && (
+            <div className="flex justify-between items-center gap-3 p-6 border-t border-gray-100 bg-gray-50 flex-shrink-0">
+              <div className="text-sm text-gray-500">
+                {previewContent.trim() ? (
+                  <div className="flex items-center">
+                    <CheckCircle className="w-4 h-4 text-green-600 mr-2" />
+                    <span>
+                      内容预览: {previewContent.trim().split(/\s+/).length} 字 · 可以提交
+                    </span>
+                  </div>
+                ) : (
+                  <span>请先添加内容后提交</span>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowUpload(false);
+                    setUploadContent('');
+                    setUploadUrl('');
+                    setPreviewContent('');
+                  }}
+                  className="px-6 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors font-medium"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleSubmitUpload}
+                  disabled={!previewContent.trim() || isProcessing || isUploading}
+                  className={`px-6 py-2.5 ${
+                    previewContent.trim() && !isProcessing && !isUploading
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg animate-pulse' 
+                      : 'bg-gray-300 cursor-not-allowed text-gray-500'
+                  } rounded-lg transition-all font-medium flex items-center gap-2`}
+                  title={previewContent.trim() ? '' : '请先添加内容'}
+                >
+                  {isProcessing || isUploading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      {isUploading ? '正在添加到库中...' : '添加中...'}
+                    </>
+                  ) : previewContent.trim() ? (
+                    <>
+                      <CheckCircle className="w-4 h-4" />
+                      确认添加到{activeTab === 'memory' ? '记忆库' : '案例库'}
+                    </>
+                  ) : (
+                    <>
+                      <AlertCircle className="w-4 h-4" />
+                      请先添加内容
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
+            )}
           </div>
         </div>
       )}
@@ -358,9 +688,20 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, onUpload, onArticleSelect }
                 <div
                   key={article.id}
                   onClick={() => onArticleSelect(article)}
-                  className="p-4 bg-white border border-gray-200 hover:border-blue-300 hover:shadow-sm rounded-xl cursor-pointer transition-all duration-200"
+                  className={`p-4 bg-white border rounded-xl cursor-pointer transition-all duration-200 ${
+                    isRecentlyAdded(article)
+                      ? 'border-green-300 bg-green-50 shadow-md ring-2 ring-green-200'
+                      : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
+                  }`}
                 >
-                  <h4 className="font-medium text-gray-900 mb-2 line-clamp-1">{article.title}</h4>
+                  <div className="flex items-start justify-between mb-2">
+                    <h4 className="font-medium text-gray-900 line-clamp-1 flex-1">{article.title}</h4>
+                    {isRecentlyAdded(article) && (
+                      <span className="text-xs px-2 py-1 bg-green-600 text-white rounded-full ml-2 flex-shrink-0">
+                        新增
+                      </span>
+                    )}
+                  </div>
                   <p className="text-gray-600 text-sm mb-3 line-clamp-2 leading-relaxed">
                     {article.content.substring(0, 100)}...
                   </p>
@@ -398,9 +739,20 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, onUpload, onArticleSelect }
                 <div
                   key={article.id}
                   onClick={() => onArticleSelect(article)}
-                  className="p-4 bg-white border border-gray-200 hover:border-purple-300 hover:shadow-sm rounded-xl cursor-pointer transition-all duration-200"
+                  className={`p-4 bg-white border rounded-xl cursor-pointer transition-all duration-200 ${
+                    isRecentlyAdded(article)
+                      ? 'border-green-300 bg-green-50 shadow-md ring-2 ring-green-200'
+                      : 'border-gray-200 hover:border-purple-300 hover:shadow-sm'
+                  }`}
                 >
-                  <h4 className="font-medium text-gray-900 mb-2 line-clamp-1">{article.title}</h4>
+                  <div className="flex items-start justify-between mb-2">
+                    <h4 className="font-medium text-gray-900 line-clamp-1 flex-1">{article.title}</h4>
+                    {isRecentlyAdded(article) && (
+                      <span className="text-xs px-2 py-1 bg-green-600 text-white rounded-full ml-2 flex-shrink-0">
+                        新增
+                      </span>
+                    )}
+                  </div>
                   <p className="text-gray-600 text-sm mb-3 line-clamp-2 leading-relaxed">
                     {article.content.substring(0, 100)}...
                   </p>

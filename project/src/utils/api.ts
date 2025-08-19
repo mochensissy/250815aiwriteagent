@@ -5,32 +5,23 @@
  * 提供统一的接口供组件调用各种AI服务
  */
 
-// Google Gemini API配置
-const GEMINI_API_KEY = 'AIzaSyAH-wepOrQu0ujJfeqbcz2Pn7wHHvLihxg';
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
-
-// Perplexity API配置
-const PERPLEXITY_API_KEY = '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';
-const PERPLEXITY_URL = 'https://api.perplexity.ai/chat/completions';
-
-// 豆包生图API配置
-const DOUBAO_API_KEY = 'ca9d6a48-f76d-4c29-a621-2cf259a55b2f';
-const DOUBAO_URL = 'https://ark.cn-beijing.volces.com/api/v3/images/generations';
+import { getAPIConfig } from './storage';
 
 /**
  * 调用Google Gemini API进行文本生成
  */
 export const callGeminiAPI = async (prompt: string): Promise<string> => {
   try {
+    const config = getAPIConfig();
     console.log('🚀 调用Gemini API');
     console.log('📝 Prompt长度:', prompt.length);
     console.log('📝 Prompt预览:', prompt.substring(0, 200) + '...');
     
-    const response = await fetch(GEMINI_URL, {
+    const response = await fetch(config.gemini.endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-goog-api-key': GEMINI_API_KEY,
+        'X-goog-api-key': config.gemini.apiKey,
       },
       body: JSON.stringify({
         contents: [
@@ -76,20 +67,16 @@ export const callGeminiAPI = async (prompt: string): Promise<string> => {
  */
 export const callPerplexityAPI = async (query: string): Promise<string> => {
   try {
-    const response = await fetch(PERPLEXITY_URL, {
+    const config = getAPIConfig();
+    const response = await fetch(config.perplexity.endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`,
+        'Authorization': `Bearer ${config.perplexity.apiKey}`,
       },
       body: JSON.stringify({
-        model: 'llama-3.1-sonar-small-128k-online',
-        messages: [
-          {
-            role: 'user',
-            content: `搜索关于"${query}"的最新信息、观点和数据，重点关注热门文章和专业见解。请提供结构化的总结。`
-          }
-        ]
+        query: query,
+        model: 'llama-3.1-sonar-large-128k-online'
       })
     });
 
@@ -98,7 +85,8 @@ export const callPerplexityAPI = async (query: string): Promise<string> => {
     }
 
     const data = await response.json();
-    return data.choices[0]?.message?.content || '';
+    // 根据Perplexity API的实际响应格式调整
+    return data.answer || data.result || data.response || JSON.stringify(data);
   } catch (error) {
     console.error('Perplexity API调用失败:', error);
     throw error;
@@ -110,14 +98,15 @@ export const callPerplexityAPI = async (query: string): Promise<string> => {
  */
 export const generateImage = async (prompt: string, size = '1024x1024'): Promise<string> => {
   try {
-    const response = await fetch(DOUBAO_URL, {
+    const config = getAPIConfig();
+    const response = await fetch(config.doubao.endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${DOUBAO_API_KEY}`,
+        'Authorization': `Bearer ${config.doubao.apiKey}`,
       },
       body: JSON.stringify({
-        model: 'doubao-seedream-3-0-t2i-250415',
+        model: config.doubao.model,
         prompt: prompt,
         response_format: 'url',
         size: size,

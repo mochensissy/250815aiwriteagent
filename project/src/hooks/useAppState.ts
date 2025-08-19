@@ -6,12 +6,14 @@
  */
 
 import { useState, useEffect } from 'react';
-import { AppState, KnowledgeBaseArticle, OutlineNode, GeneratedImage, StylePrototype } from '../types';
+import { AppState, KnowledgeBaseArticle, OutlineNode, GeneratedImage, StylePrototype, APIConfig } from '../types';
 import { 
   getKnowledgeBase, 
   saveKnowledgeBase, 
   getCurrentArticle, 
-  saveCurrentArticle 
+  saveCurrentArticle,
+  getAPIConfig,
+  saveAPIConfig 
 } from '../utils/storage';
 import { 
   analyzeStyleElements, 
@@ -30,7 +32,8 @@ export const useAppState = () => {
     knowledgeBase: [],
     styleElements: [],
     termMappings: [],
-    writingRules: []
+    writingRules: [],
+    apiConfig: getAPIConfig()
   });
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -40,11 +43,13 @@ export const useAppState = () => {
   useEffect(() => {
     const knowledgeBase = getKnowledgeBase();
     const currentArticle = getCurrentArticle();
+    const apiConfig = getAPIConfig();
     
     setAppState(prev => ({
       ...prev,
       knowledgeBase,
-      currentArticle: currentArticle || undefined
+      currentArticle: currentArticle || undefined,
+      apiConfig
     }));
   }, []);
 
@@ -55,23 +60,33 @@ export const useAppState = () => {
     category: 'memory' | 'case', 
     source: 'upload' | 'paste' | 'url',
     url?: string
-  ) => {
-    const newArticle: KnowledgeBaseArticle = {
-      id: Date.now().toString(),
-      title,
-      content,
-      category,
-      tags: [], // 后续可添加AI自动标签功能
-      createdAt: new Date().toISOString(),
-      source,
-      url
-    };
+  ): Promise<void> => {
+    return new Promise((resolve) => {
+      try {
+        const newArticle: KnowledgeBaseArticle = {
+          id: Date.now().toString(),
+          title,
+          content,
+          category,
+          tags: [], // 后续可添加AI自动标签功能
+          createdAt: new Date().toISOString(),
+          source,
+          url
+        };
 
-    const updatedKnowledgeBase = [...appState.knowledgeBase, newArticle];
-    setAppState(prev => ({ ...prev, knowledgeBase: updatedKnowledgeBase }));
-    saveKnowledgeBase(updatedKnowledgeBase);
-    
-    toast.success(`文章已添加到${category === 'memory' ? '记忆库' : '案例库'}`);
+        const updatedKnowledgeBase = [...appState.knowledgeBase, newArticle];
+        setAppState(prev => ({ ...prev, knowledgeBase: updatedKnowledgeBase }));
+        saveKnowledgeBase(updatedKnowledgeBase);
+        
+        // 模拟一点延迟来显示上传过程
+        setTimeout(() => {
+          resolve();
+        }, 500);
+      } catch (error) {
+        console.error('添加到知识库失败:', error);
+        throw error;
+      }
+    });
   };
 
   // 开始新文章创作
@@ -367,6 +382,16 @@ ${appState.currentArticle.content}
     });
   };
 
+  // 更新API配置
+  const updateAPIConfig = (apiConfig: APIConfig) => {
+    setAppState(prev => ({
+      ...prev,
+      apiConfig
+    }));
+    saveAPIConfig(apiConfig);
+    toast.success('API配置已更新');
+  };
+
   // 保存当前文章状态
   useEffect(() => {
     if (appState.currentArticle) {
@@ -389,6 +414,7 @@ ${appState.currentArticle.content}
     updateOutline,
     updateContent,
     exportArticle,
+    updateAPIConfig,
     setAppState
   };
 };

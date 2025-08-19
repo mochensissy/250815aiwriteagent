@@ -7,11 +7,13 @@
 
 import React, { useState } from 'react';
 import { Toaster } from 'react-hot-toast';
+import { Settings } from 'lucide-react';
 import Sidebar from './components/Layout/Sidebar';
 import DraftInput from './components/Writing/DraftInput';
 import OutlineEditor from './components/Editor/OutlineEditor';
 import ArticleEditor from './components/Editor/ArticleEditor';
 import ImageManager from './components/Images/ImageManager';
+import APIManager from './components/Settings/APIManager';
 import { useAppState } from './hooks/useAppState';
 import { KnowledgeBaseArticle, StylePrototype } from './types';
 import { generateImage } from './utils/api';
@@ -30,11 +32,13 @@ function App() {
     generateCover,
     updateOutline,
     updateContent,
-    exportArticle
+    exportArticle,
+    updateAPIConfig
   } = useAppState();
 
   const [currentView, setCurrentView] = useState<'draft' | 'outline' | 'editor'>('draft');
   const [selectedPrototype, setSelectedPrototype] = useState<StylePrototype>();
+  const [showAPIManager, setShowAPIManager] = useState(false);
 
   // 处理文章选择
   const handleArticleSelect = (article: KnowledgeBaseArticle) => {
@@ -126,6 +130,21 @@ function App() {
 
       {/* 主内容区域 */}
       <div className="flex-1 flex flex-col">
+        {/* 顶部工具栏 */}
+        <div className="bg-white border-b border-gray-200 px-6 py-3 flex justify-between items-center">
+          <div className="text-lg font-semibold text-gray-900">
+            AI写作助手
+          </div>
+          <button
+            onClick={() => setShowAPIManager(true)}
+            className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+            title="API管理"
+          >
+            <Settings className="w-4 h-4" />
+            设置
+          </button>
+        </div>
+
         {currentView === 'draft' && (
           <div className="flex-1 flex items-center justify-center p-8 bg-white">
             <DraftInput
@@ -229,6 +248,14 @@ function App() {
           </div>
         )}
       </div>
+
+      {/* API管理弹窗 */}
+      <APIManager
+        isOpen={showAPIManager}
+        onClose={() => setShowAPIManager(false)}
+        apiConfig={appState.apiConfig}
+        onConfigChange={updateAPIConfig}
+      />
     </div>
   );
 }

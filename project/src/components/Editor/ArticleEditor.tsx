@@ -5,10 +5,11 @@
  * 集成了智能编辑工具栏和实时预览功能
  */
 
-import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, Image, Download, Wand2, MoreHorizontal, Copy, Eye, Edit3 } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { MessageCircle, Image, Download, Wand2, MoreHorizontal, Copy, Eye, Edit3, Send, X, Sparkles, Type, Scissors, Volume2, BookOpen, Zap } from 'lucide-react';
 import { EditSuggestion } from '../../types';
 import ReactMarkdown from 'react-markdown';
+import toast from 'react-hot-toast';
 
 interface ArticleEditorProps {
   content: string;
@@ -41,57 +42,84 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({
   const chatInputRef = useRef<HTMLInputElement>(null);
 
   const editSuggestions: EditSuggestion[] = [
-    { type: 'polish', label: '润色', icon: '✨' },
-    { type: 'expand', label: '扩写', icon: '📝' },
-    { type: 'shorten', label: '缩写', icon: '✂️' },
-    { type: 'tone', label: '改语气', icon: '🎭' },
+    { type: 'polish', label: '润色', icon: '✨', description: '优化语言表达，让文字更优美' },
+    { type: 'expand', label: '扩写', icon: '📝', description: '增加内容细节，丰富表达' },
+    { type: 'shorten', label: '缩写', icon: '✂️', description: '精简内容，突出重点' },
+    { type: 'tone', label: '改语气', icon: '🎭', description: '调整文章语气和风格' },
+    { type: 'professional', label: '专业化', icon: '💼', description: '让表达更专业正式' },
+    { type: 'casual', label: '口语化', icon: '💬', description: '让表达更轻松自然' },
   ];
 
   // 处理文本选择
-  const handleTextSelection = () => {
+  const handleTextSelection = useCallback(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
 
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    
-    if (start !== end) {
-      const selected = content.substring(start, end);
-      setSelectedText(selected);
+    // 延迟执行，确保选择状态已更新
+    setTimeout(() => {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
       
-      // 计算选择位置（简化实现）
-      const rect = textarea.getBoundingClientRect();
-      setSelectionPosition({
-        x: rect.left + 100,
-        y: rect.top + 50
-      });
-      setShowSuggestions(true);
-    } else {
-      setShowSuggestions(false);
-    }
-  };
+      if (start !== end && end - start > 1) {
+        const selected = content.substring(start, end).trim();
+        if (selected.length > 0) {
+          setSelectedText(selected);
+          
+          // 计算工具栏位置 - 相对于视口
+          const rect = textarea.getBoundingClientRect();
+          
+          // 简化位置计算
+          const x = Math.min(rect.right - 300, Math.max(rect.left, rect.left + 20));
+          const y = rect.top - 60; // 工具栏显示在选中文本上方
+          
+          setSelectionPosition({ x, y });
+          setShowSuggestions(true);
+        }
+      } else {
+        setShowSuggestions(false);
+        setSelectedText('');
+        setSelectionPosition(null);
+      }
+    }, 10);
+  }, [content]);
 
   // 处理编辑建议
-  const handleSuggestion = async (suggestion: EditSuggestion) => {
+  const handleSuggestion = useCallback(async (suggestion: EditSuggestion) => {
+    if (!selectedText) return;
+    
     let instruction = '';
     switch (suggestion.type) {
       case 'polish':
-        instruction = '请润色这段文字，让它更加生动和吸引人';
+        instruction = `请润色以下文字，让它更加生动和吸引人："${selectedText}"`;
         break;
       case 'expand':
-        instruction = '请扩展这段内容，增加更多细节和论证';
+        instruction = `请扩展以下内容，增加更多细节和论证："${selectedText}"`;
         break;
       case 'shorten':
-        instruction = '请精简这段文字，保留核心观点';
+        instruction = `请精简以下文字，保留核心观点："${selectedText}"`;
         break;
       case 'tone':
-        instruction = '请调整这段文字的语气，让它更加专业或轻松';
+        instruction = `请调整以下文字的语气，让它更适合目标读者："${selectedText}"`;
         break;
+      case 'professional':
+        instruction = `请将以下文字改写得更专业正式："${selectedText}"`;
+        break;
+      case 'casual':
+        instruction = `请将以下文字改写得更轻松口语化："${selectedText}"`;
+        break;
+      default:
+        instruction = `请优化以下文字："${selectedText}"`;
     }
     
     await onEditInstruction(instruction, selectedText);
+    
+    // 隐藏建议栏
     setShowSuggestions(false);
-  };
+    setSelectedText('');
+    setSelectionPosition(null);
+    
+    toast.success(`正在${suggestion.label}选中文本...`);
+  }, [selectedText, onEditInstruction]);
 
   // 处理对话指令
   const handleChatSubmit = async () => {
@@ -298,34 +326,69 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({
           {/* 划词建议工具栏 */}
           {showSuggestions && selectionPosition && (
             <div
-              className="fixed bg-white border border-gray-300 rounded-lg shadow-lg p-2 z-50"
+              className="fixed bg-white border border-gray-200 rounded-xl shadow-xl p-3 z-50 backdrop-blur-sm"
               style={{
                 left: selectionPosition.x,
                 top: selectionPosition.y,
+                maxWidth: '320px'
               }}
             >
-              <div className="flex gap-1">
+              <div className="mb-2">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-gray-500">
+                    已选择 {selectedText.length} 个字符
+                  </span>
+                  <button
+                    onClick={() => {
+                      setShowSuggestions(false);
+                      setSelectedText('');
+                      setSelectionPosition(null);
+                    }}
+                    className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+                <div className="text-xs text-gray-400 truncate bg-gray-50 px-2 py-1 rounded">
+                  "{selectedText.substring(0, 50)}{selectedText.length > 50 ? '...' : ''}"
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-2">
                 {editSuggestions.map((suggestion) => (
                   <button
                     key={suggestion.type}
                     onClick={() => handleSuggestion(suggestion)}
-                    className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded transition-colors flex items-center gap-1"
+                    className="group p-2 bg-gray-50 hover:bg-blue-50 hover:border-blue-200 border border-gray-200 rounded-lg text-sm transition-all duration-200 text-left"
+                    title={suggestion.description}
                   >
-                    <span>{suggestion.icon}</span>
-                    {suggestion.label}
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-base group-hover:scale-110 transition-transform">
+                        {suggestion.icon}
+                      </span>
+                      <span className="font-medium text-gray-700 group-hover:text-blue-600">
+                        {suggestion.label}
+                      </span>
+                    </div>
+                    {suggestion.description && (
+                      <div className="text-xs text-gray-500 group-hover:text-blue-500">
+                        {suggestion.description}
+                      </div>
+                    )}
                   </button>
                 ))}
-                <div className="w-px bg-gray-300 mx-1" />
+              </div>
+              
+              <div className="mt-3 pt-2 border-t border-gray-100">
                 <button
                   onClick={() => {
-                    const instruction = prompt('请输入具体的修改要求：');
-                    if (instruction) {
-                      handleSuggestion({ type: 'polish', label: '自定义', icon: '🎯' });
-                    }
+                    setShowChat(true);
+                    setShowSuggestions(false);
                   }}
-                  className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                  className="w-full p-2 bg-gradient-to-r from-purple-50 to-blue-50 hover:from-purple-100 hover:to-blue-100 border border-purple-200 rounded-lg text-sm text-purple-700 transition-all duration-200 flex items-center justify-center gap-2"
                 >
-                  <MoreHorizontal className="w-3 h-3" />
+                  <MessageCircle className="w-4 h-4" />
+                  自定义指令
                 </button>
               </div>
             </div>
