@@ -47,6 +47,7 @@ export interface WritingRule {
 export interface OutlineNode {
   id: string;
   title: string;
+  summary?: string; // 内容概述
   level: number;
   content?: string;
   children?: OutlineNode[];

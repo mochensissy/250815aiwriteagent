@@ -152,6 +152,11 @@ const SortableOutlineItem: React.FC<{
             <span className={`${node.level === 1 ? 'font-semibold text-gray-900 text-base' : 'text-gray-700 text-sm'}`}>
               {node.title}
             </span>
+            {node.summary && (
+              <div className="text-xs text-gray-500 mt-1 leading-relaxed">
+                📝 {node.summary}
+              </div>
+            )}
             {node.content && (
               <p className="text-xs text-gray-500 mt-1 line-clamp-2">{node.content}</p>
             )}

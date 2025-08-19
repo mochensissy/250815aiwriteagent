@@ -178,11 +178,20 @@ export const useAppState = () => {
     ];
 
     console.log('🧪 创建测试案例数据...');
+    const updatedKnowledgeBase = [...appState.knowledgeBase, ...testCases];
     setAppState(prev => ({
       ...prev,
-      knowledgeBase: [...prev.knowledgeBase, ...testCases]
+      knowledgeBase: updatedKnowledgeBase
     }));
-    saveKnowledgeBase([...appState.knowledgeBase, ...testCases]);
+    saveKnowledgeBase(updatedKnowledgeBase);
+    
+    console.log('✅ 测试数据添加完成:', {
+      之前文章数: appState.knowledgeBase.length,
+      新增文章数: testCases.length,
+      现在总数: updatedKnowledgeBase.length,
+      案例库数量: updatedKnowledgeBase.filter(a => a.category === 'case').length
+    });
+    
     toast.success('已添加测试案例数据，现在可以测试风格推荐功能了！');
   };
 
@@ -301,9 +310,18 @@ export const useAppState = () => {
       
       // 先推荐风格原型，并直接在函数内返回结果
       console.log('🔍 推荐风格原型...');
+      console.log('📚 当前知识库状态:', {
+        总文章数: appState.knowledgeBase.length,
+        案例库: appState.knowledgeBase.filter(a => a.category === 'case').length,
+        记忆库: appState.knowledgeBase.filter(a => a.category === 'memory').length
+      });
+      
       const prototypes = await getStylePrototypesFromDraft(draft);
       
       console.log('📊 推荐结果:', prototypes?.length || 0);
+      if (prototypes && prototypes.length > 0) {
+        console.log('🎯 推荐详情:', prototypes);
+      }
       
       // 检查是否有推荐的风格原型
       if (prototypes && prototypes.length > 0) {
