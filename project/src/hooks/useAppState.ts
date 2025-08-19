@@ -154,23 +154,74 @@ export const useAppState = () => {
     });
   };
 
+  // 创建测试案例数据（仅用于测试）
+  const createTestCaseData = () => {
+    const testCases = [
+      {
+        id: 'test_case_1',
+        title: '深度思考：为什么你总是很忙却没有成果？',
+        content: '每天忙忙碌碌，却发现一天结束后似乎什么都没做成。这种感觉你熟悉吗？\n\n我最近做了一个有趣的实验：记录自己一周的时间分配。结果让我震惊 - 真正用于重要工作的时间，不到20%。\n\n那么问题来了：剩下的80%时间去哪了？\n\n经过仔细分析，我发现了三个"时间黑洞"：\n\n**第一个黑洞：伪工作**\n看起来在工作，实际上在做无意义的事情。比如无目的地刷邮件、参加没有议程的会议、整理已经很整齐的文档。\n\n**第二个黑洞：切换成本**\n现代人最大的问题是注意力分散。每次任务切换，大脑需要重新聚焦，这个过程比你想象的要耗时。\n\n**第三个黑洞：完美主义陷阱**\n把80分的工作做到95分，往往需要3倍的时间。而这多出来的15分，很多时候对结果影响微乎其微。\n\n解决方案其实很简单：\n\n1. 每天开始前，列出3件最重要的事\n2. 用番茄工作法，25分钟专注做一件事\n3. 学会说"这样就够了"\n\n记住，忙碌不等于有效率。真正的高手，都是用最少的时间，做最重要的事。',
+        category: 'case' as const,
+        tags: ['效率', '时间管理', '深度思考'],
+        createdAt: new Date().toISOString(),
+        source: 'paste' as const
+      },
+      {
+        id: 'test_case_2', 
+        title: '我用3年时间验证了一个残酷真相：圈子决定命运',
+        content: '三年前，我还是一个相信"努力就能改变命运"的人。\n\n直到我亲眼见证了两个同样优秀的朋友，走向了完全不同的人生轨迹。\n\n**故事的主角是小A和小B**\n\n两人都是985毕业，智商相当，工作能力不相上下。唯一的区别是：\n\n小A喜欢独来独往，认为朋友多了是负担\n小B热衷于各种聚会，总是在认识新朋友\n\n三年后的今天：\n\n小A还在原来的公司做着同样的工作，薪水涨了30%\n小B已经跳槽两次，现在的薪水是小A的3倍，还自己创业开了公司\n\n**这让我开始思考一个问题：到底是什么拉开了两个人的差距？**\n\n答案很残酷：圈子。\n\n小B通过不断社交，认识了：\n- 投资人（帮他拿到了创业资金）\n- 行业大佬（给了他很多商业建议）\n- 优秀同行（成为了合作伙伴）\n\n而小A，始终在一个人战斗。\n\n**我总结了3个关于圈子的残酷真相：**\n\n1. 信息差是最大的贫富差\n2. 人脉不是你认识多少人，而是多少人愿意帮你\n3. 圈子的质量，决定了你的上限\n\n如果你想改变现状，先从改变圈子开始。\n\n因为，和什么样的人在一起，你就会成为什么样的人。',
+        category: 'case' as const,
+        tags: ['人际关系', '社交', '成长'],
+        createdAt: new Date().toISOString(),
+        source: 'paste' as const
+      }
+    ];
+
+    console.log('🧪 创建测试案例数据...');
+    setAppState(prev => ({
+      ...prev,
+      knowledgeBase: [...prev.knowledgeBase, ...testCases]
+    }));
+    saveKnowledgeBase([...appState.knowledgeBase, ...testCases]);
+    toast.success('已添加测试案例数据，现在可以测试风格推荐功能了！');
+  };
+
   // 推荐风格原型
   const recommendStylePrototypesFromDraft = async (draft: string): Promise<void> => {
     try {
       console.log('🎨 开始推荐风格原型...');
-      const caseArticles = appState.knowledgeBase.filter(a => a.category === 'case');
+      console.log('📊 当前知识库文章总数:', appState.knowledgeBase.length);
       
-      if (caseArticles.length === 0) {
-        console.log('⚠️ 案例库为空，无法推荐风格原型');
+      const caseArticles = appState.knowledgeBase.filter(a => a.category === 'case');
+      const memoryArticles = appState.knowledgeBase.filter(a => a.category === 'memory');
+      
+      console.log('📁 案例库文章数:', caseArticles.length);
+      console.log('🧠 记忆库文章数:', memoryArticles.length);
+      
+      // 如果案例库为空，使用记忆库文章作为推荐源
+      const referenceArticles = caseArticles.length > 0 ? caseArticles : memoryArticles;
+      
+      if (referenceArticles.length === 0) {
+        console.log('⚠️ 没有可用的参考文章，跳过风格推荐');
+        setStylePrototypes([]);
         return;
       }
       
-      const prototypes = await recommendStylePrototypes(draft, caseArticles);
+      console.log('🔍 使用', referenceArticles.length, '篇', caseArticles.length > 0 ? '案例库' : '记忆库', '文章进行推荐');
+      
+      const prototypes = await recommendStylePrototypes(draft, referenceArticles);
       console.log('✅ 风格原型推荐完成:', prototypes.length);
+      
+      if (prototypes.length > 0) {
+        prototypes.forEach((p, i) => {
+          console.log(`📖 推荐${i+1}: ${p.title} (相似度: ${p.similarity}%)`);
+        });
+      }
       
       setStylePrototypes(prototypes);
     } catch (error) {
-      console.error('风格原型推荐失败:', error);
+      console.error('❌ 风格原型推荐失败:', error);
+      setStylePrototypes([]);
     }
   };
 
@@ -247,6 +298,10 @@ export const useAppState = () => {
       console.log('🔍 推荐风格原型...');
       await recommendStylePrototypesFromDraft(draft);
       
+      // 等待风格推荐完成，然后检查结果
+      // 注意：这里需要等待异步的风格推荐完成
+      await new Promise(resolve => setTimeout(resolve, 1000)); // 给AI推荐一点时间
+      
       // 检查是否有推荐的风格原型
       if (stylePrototypes.length > 0) {
         console.log(`✨ 找到 ${stylePrototypes.length} 个推荐的风格原型，等待用户确认...`);
@@ -264,9 +319,11 @@ export const useAppState = () => {
           }
         }));
         
-        toast.success('请在右侧选择参考的写作风格，然后生成大纲');
+        toast.success('请选择参考的写作风格，然后生成大纲');
         return; // 不继续执行大纲生成
       }
+      
+      console.log('⚠️ 没有找到推荐的风格原型，继续使用通用风格生成大纲...');
       
       // 如果没有推荐的风格原型，使用所有确认的风格要素
       const allStyleElements = appState.knowledgeBase
@@ -722,6 +779,7 @@ ${appState.currentArticle.outline.map(node => {
     updateStyleElement,
     recommendStylePrototypesFromDraft,
     generateOutlineWithSelectedStyle,
+    createTestCaseData,
     startNewArticle,
     generateArticle,
     generateTitleOptions,

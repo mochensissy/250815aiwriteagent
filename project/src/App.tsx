@@ -28,6 +28,7 @@ function App() {
     updateStyleElement,
     recommendStylePrototypesFromDraft,
     generateOutlineWithSelectedStyle,
+    createTestCaseData,
     startNewArticle,
     generateArticle,
     handleEditInstruction,
@@ -171,14 +172,23 @@ function App() {
           <div className="text-lg font-semibold text-gray-900">
             AI写作助手
           </div>
-          <button
-            onClick={() => setShowAPIManager(true)}
-            className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-            title="API管理"
-          >
-            <Settings className="w-4 h-4" />
-            设置
-          </button>
+          <div className="flex items-center gap-2">
+            {/* 临时测试按钮 */}
+            <button
+              onClick={createTestCaseData}
+              className="flex items-center gap-2 px-3 py-1 text-xs bg-yellow-100 text-yellow-700 hover:bg-yellow-200 rounded-lg transition-colors"
+            >
+              添加测试案例
+            </button>
+            <button
+              onClick={() => setShowAPIManager(true)}
+              className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              title="API管理"
+            >
+              <Settings className="w-4 h-4" />
+              设置
+            </button>
+          </div>
         </div>
 
         {currentView === 'draft' && (

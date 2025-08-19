@@ -164,42 +164,73 @@ ${articles.map((article, index) => `文章${index + 1}:\n${article}\n\n`).join('
 /**
  * 推荐风格原型
  */
-export const recommendStylePrototypes = async (draft: string, caseArticles: any[]): Promise<any[]> => {
+export const recommendStylePrototypes = async (draft: string, referenceArticles: any[]): Promise<any[]> => {
+  console.log('🔍 开始AI风格原型推荐...');
+  console.log('📝 草稿长度:', draft.length);
+  console.log('📚 参考文章数量:', referenceArticles.length);
+
   const prompt = `
-基于用户的草稿内容，从案例库中推荐最匹配的写作风格原型：
+基于用户的草稿内容，从参考文章中推荐最匹配的写作风格原型：
 
 用户草稿：
 ${draft}
 
-案例库文章：
-${caseArticles.map((article, index) => `${index + 1}. 标题：${article.title}\n内容摘要：${article.content.substring(0, 200)}...\n\n`).join('')}
+参考文章库：
+${referenceArticles.map((article, index) => `${index + 1}. ID: ${article.id}
+标题：${article.title}
+内容摘要：${article.content.substring(0, 300)}...
 
-请分析草稿的主题、语气、结构需求，从案例库中选择1-3个最匹配的文章作为风格原型。
+`).join('')}
 
-返回JSON数组格式，包含：
-- articleId: 文章ID
+请分析草稿的主题、语气、结构、写作风格，从参考文章中选择1-3个最匹配的文章作为风格原型。
+
+返回JSON数组格式，每个元素包含：
+- id: 生成唯一ID (格式: "prototype_" + timestamp + "_" + index)
+- title: 参考文章的标题  
+- description: 推荐理由 (为什么这篇文章适合作为风格参考)
+- articleId: 参考文章的ID
 - similarity: 相似度分数(0-100)
-- reason: 推荐理由
 
-示例：
+确保返回格式如下：
 [
   {
-    "articleId": "1",
-    "similarity": 85,
-    "reason": "同样是分析类文章，结构清晰，逻辑严密"
+    "id": "prototype_${Date.now()}_1",
+    "title": "文章标题",
+    "description": "推荐理由：主题相关性高，写作风格类似...",
+    "articleId": "文章ID", 
+    "similarity": 85
   }
 ]
 `;
 
   try {
     const result = await callGeminiAPI(prompt);
+    console.log('🤖 AI推荐结果:', result);
+    
     try {
-      return JSON.parse(result);
-    } catch {
+      const recommendations = JSON.parse(result);
+      console.log('✅ 解析成功，推荐数量:', recommendations.length);
+      
+      // 验证数据结构并添加必要字段
+      const validPrototypes = recommendations
+        .filter(item => item.articleId && item.title && item.similarity)
+        .map((item, index) => ({
+          id: item.id || `prototype_${Date.now()}_${index}`,
+          title: item.title,
+          description: item.description || item.reason || '相似风格推荐',
+          articleId: item.articleId,
+          similarity: Math.min(100, Math.max(0, parseInt(item.similarity) || 70))
+        }));
+      
+      console.log('🎯 有效推荐数量:', validPrototypes.length);
+      return validPrototypes;
+    } catch (parseError) {
+      console.error('❌ JSON解析失败:', parseError);
+      console.log('📄 原始返回内容:', result);
       return [];
     }
   } catch (error) {
-    console.error('风格原型推荐失败:', error);
+    console.error('❌ 风格原型推荐API调用失败:', error);
     return [];
   }
 };
