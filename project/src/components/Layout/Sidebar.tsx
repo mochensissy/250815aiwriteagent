@@ -861,11 +861,27 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, onUpload, onArticleSelect, 
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">写作风格设置</h3>
             
-            <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl">
-              <h4 className="text-sm font-semibold mb-3 flex items-center text-blue-800">
-                <Brain className="w-4 h-4 mr-2" />
-                个人风格要素 ({allStyleElements.length})
-              </h4>
+                                <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-semibold flex items-center text-blue-800">
+                          <Brain className="w-4 h-4 mr-2" />
+                          个人风格要素 ({allStyleElements.length})
+                        </h4>
+                        {allStyleElements.some(e => !e.confirmed) && (
+                          <button
+                            onClick={() => {
+                              const unconfirmedElements = allStyleElements.filter(e => !e.confirmed);
+                              unconfirmedElements.forEach(element => {
+                                onStyleElementUpdate(element.id, true);
+                              });
+                              toast.success(`已确认 ${unconfirmedElements.length} 个风格要素`);
+                            }}
+                            className="text-xs bg-green-600 text-white px-3 py-1 rounded-full hover:bg-green-700 transition-colors"
+                          >
+                            一键确认全部
+                          </button>
+                        )}
+                      </div>
               
               {allStyleElements.length === 0 ? (
                 <p className="text-blue-700 text-xs leading-relaxed">

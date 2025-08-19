@@ -186,8 +186,8 @@ export const useAppState = () => {
     toast.success('已添加测试案例数据，现在可以测试风格推荐功能了！');
   };
 
-  // 推荐风格原型
-  const recommendStylePrototypesFromDraft = async (draft: string): Promise<void> => {
+  // 获取风格原型推荐 (直接返回结果)
+  const getStylePrototypesFromDraft = async (draft: string): Promise<StylePrototype[]> => {
     try {
       console.log('🎨 开始推荐风格原型...');
       console.log('📊 当前知识库文章总数:', appState.knowledgeBase.length);
@@ -203,8 +203,7 @@ export const useAppState = () => {
       
       if (referenceArticles.length === 0) {
         console.log('⚠️ 没有可用的参考文章，跳过风格推荐');
-        setStylePrototypes([]);
-        return;
+        return [];
       }
       
       console.log('🔍 使用', referenceArticles.length, '篇', caseArticles.length > 0 ? '案例库' : '记忆库', '文章进行推荐');
@@ -218,11 +217,17 @@ export const useAppState = () => {
         });
       }
       
-      setStylePrototypes(prototypes);
+      return prototypes;
     } catch (error) {
       console.error('❌ 风格原型推荐失败:', error);
-      setStylePrototypes([]);
+      return [];
     }
+  };
+  
+  // 推荐风格原型 (兼容旧接口)
+  const recommendStylePrototypesFromDraft = async (draft: string): Promise<void> => {
+    const prototypes = await getStylePrototypesFromDraft(draft);
+    setStylePrototypes(prototypes);
   };
 
   // 用户确认风格后生成大纲
@@ -294,18 +299,18 @@ export const useAppState = () => {
       console.log('📝 草稿长度:', draft.length);
       console.log('🎯 目标平台:', platform);
       
-      // 先推荐风格原型，但不立即生成大纲
+      // 先推荐风格原型，并直接在函数内返回结果
       console.log('🔍 推荐风格原型...');
-      await recommendStylePrototypesFromDraft(draft);
+      const prototypes = await getStylePrototypesFromDraft(draft);
       
-      // 等待风格推荐完成，然后检查结果
-      // 注意：这里需要等待异步的风格推荐完成
-      await new Promise(resolve => setTimeout(resolve, 1000)); // 给AI推荐一点时间
+      console.log('📊 推荐结果:', prototypes?.length || 0);
       
       // 检查是否有推荐的风格原型
-      if (stylePrototypes.length > 0) {
-        console.log(`✨ 找到 ${stylePrototypes.length} 个推荐的风格原型，等待用户确认...`);
-        // 不立即生成大纲，等待用户在界面上确认选择的参考文章
+      if (prototypes && prototypes.length > 0) {
+        console.log(`✨ 找到 ${prototypes.length} 个推荐的风格原型，等待用户确认...`);
+        
+        // 更新推荐状态
+        setStylePrototypes(prototypes);
         
         // 创建临时的文章状态，包含草稿但没有大纲
         setAppState(prev => ({
@@ -319,7 +324,7 @@ export const useAppState = () => {
           }
         }));
         
-        toast.success('请选择参考的写作风格，然后生成大纲');
+        toast.success(`找到 ${prototypes.length} 篇相似风格文章，请选择参考风格`);
         return; // 不继续执行大纲生成
       }
       
