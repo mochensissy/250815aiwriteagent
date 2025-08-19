@@ -16,6 +16,7 @@ interface DraftInputProps {
   onPrototypeSelect: (prototype: StylePrototype) => void;
   selectedPrototype?: StylePrototype;
   isProcessing: boolean;
+  onGenerateOutlineWithStyle?: (selectedPrototypes: StylePrototype[]) => void;
 }
 
 const DraftInput: React.FC<DraftInputProps> = ({
@@ -24,7 +25,8 @@ const DraftInput: React.FC<DraftInputProps> = ({
   stylePrototypes,
   onPrototypeSelect,
   selectedPrototype,
-  isProcessing
+  isProcessing,
+  onGenerateOutlineWithStyle
 }) => {
   const [draft, setDraft] = useState('');
   const [selectedPlatform, setSelectedPlatform] = useState('公众号');
@@ -278,6 +280,32 @@ const DraftInput: React.FC<DraftInputProps> = ({
               </div>
             ))}
           </div>
+          
+          {/* 确认选择按钮 */}
+          {selectedPrototype && onGenerateOutlineWithStyle && (
+            <div className="mt-6 text-center">
+              <button
+                onClick={() => onGenerateOutlineWithStyle([selectedPrototype])}
+                disabled={isProcessing}
+                className="px-8 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white rounded-xl font-semibold transition-all duration-200 flex items-center gap-3 mx-auto"
+              >
+                {isProcessing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    生成大纲中...
+                  </>
+                ) : (
+                  <>
+                    确认风格并生成大纲
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+              <p className="text-sm text-gray-500 mt-2">
+                将基于选定的写作风格生成个性化大纲
+              </p>
+            </div>
+          )}
         </div>
       )}
 

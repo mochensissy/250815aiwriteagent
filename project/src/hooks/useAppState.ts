@@ -174,6 +174,66 @@ export const useAppState = () => {
     }
   };
 
+  // 用户确认风格后生成大纲
+  const generateOutlineWithSelectedStyle = async (selectedPrototypes: StylePrototype[]) => {
+    if (!appState.currentArticle) return;
+    
+    setIsProcessing(true);
+    
+    try {
+      console.log('🎨 使用选定的风格生成大纲...');
+      
+      // 获取选定文章的风格要素
+      const selectedStyleElements = selectedPrototypes.flatMap(prototype => {
+        const article = appState.knowledgeBase.find(a => a.id === prototype.articleId);
+        return article?.styleElements?.filter(e => e.confirmed).map(e => e.description) || [];
+      });
+      
+      const styleContext = selectedStyleElements.join('; ');
+      console.log('🎨 选定的风格上下文:', styleContext);
+      
+      // 调用AI生成大纲
+      const { generateOutline } = await import('../utils/api');
+      const aiOutline = await generateOutline(appState.currentArticle.draft, styleContext || '通用写作风格');
+      
+      // 处理AI生成的大纲
+      let finalOutline: OutlineNode[];
+      if (aiOutline && Array.isArray(aiOutline) && aiOutline.length > 0) {
+        console.log('✅ AI大纲生成成功，节点数量:', aiOutline.length);
+        finalOutline = aiOutline.map((node, index) => ({
+          id: String(index + 1),
+          title: node.title || `章节 ${index + 1}`,
+          level: node.level || 1,
+          order: index
+        }));
+      } else {
+        console.log('⚠️ AI生成失败，使用备用大纲');
+        finalOutline = [
+          { id: '1', title: '开篇：引出话题', level: 1, order: 0 },
+          { id: '2', title: '核心观点展开', level: 1, order: 1 },
+          { id: '3', title: '个人思考感悟', level: 1, order: 2 },
+          { id: '4', title: '结语：呼应升华', level: 1, order: 3 }
+        ];
+      }
+      
+      // 更新文章状态
+      setAppState(prev => ({
+        ...prev,
+        currentArticle: prev.currentArticle ? {
+          ...prev.currentArticle,
+          outline: finalOutline
+        } : undefined
+      }));
+      
+      toast.success('大纲已生成！');
+    } catch (error) {
+      console.error('大纲生成失败:', error);
+      toast.error('大纲生成失败，请重试');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   // 开始新文章创作
   const startNewArticle = async (draft: string, platform: string = '公众号') => {
     setIsProcessing(true);
@@ -183,10 +243,32 @@ export const useAppState = () => {
       console.log('📝 草稿长度:', draft.length);
       console.log('🎯 目标平台:', platform);
       
-      // 先推荐风格原型
+      // 先推荐风格原型，但不立即生成大纲
+      console.log('🔍 推荐风格原型...');
       await recommendStylePrototypesFromDraft(draft);
       
-      // 获取风格上下文（从所有记忆库文章的风格要素中）
+      // 检查是否有推荐的风格原型
+      if (stylePrototypes.length > 0) {
+        console.log(`✨ 找到 ${stylePrototypes.length} 个推荐的风格原型，等待用户确认...`);
+        // 不立即生成大纲，等待用户在界面上确认选择的参考文章
+        
+        // 创建临时的文章状态，包含草稿但没有大纲
+        setAppState(prev => ({
+          ...prev,
+          currentArticle: {
+            title: '新文章',
+            draft,
+            outline: [], // 空大纲，等待用户确认风格后生成
+            content: '',
+            images: []
+          }
+        }));
+        
+        toast.success('请在右侧选择参考的写作风格，然后生成大纲');
+        return; // 不继续执行大纲生成
+      }
+      
+      // 如果没有推荐的风格原型，使用所有确认的风格要素
       const allStyleElements = appState.knowledgeBase
         .filter(a => a.category === 'memory')
         .flatMap(a => a.styleElements || [])
@@ -639,6 +721,7 @@ ${appState.currentArticle.outline.map(node => {
     deleteArticle,
     updateStyleElement,
     recommendStylePrototypesFromDraft,
+    generateOutlineWithSelectedStyle,
     startNewArticle,
     generateArticle,
     generateTitleOptions,

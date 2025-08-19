@@ -27,6 +27,7 @@ function App() {
     deleteArticle,
     updateStyleElement,
     recommendStylePrototypesFromDraft,
+    generateOutlineWithSelectedStyle,
     startNewArticle,
     generateArticle,
     handleEditInstruction,
@@ -77,7 +78,17 @@ function App() {
     }
     
     await startNewArticle(draft, platform);
-    setCurrentView('outline');
+    // 如果有推荐的风格原型，停留在草稿页面等待用户确认
+    // 否则直接跳转到大纲页面
+    if (stylePrototypes.length === 0) {
+      setCurrentView('outline');
+    }
+  };
+
+  // 处理用户确认风格并生成大纲
+  const handleGenerateOutlineWithStyle = async (selectedPrototypes: StylePrototype[]) => {
+    await generateOutlineWithSelectedStyle(selectedPrototypes);
+    setCurrentView('outline'); // 生成大纲后跳转到大纲页面
   };
 
   // 处理大纲生成完成
@@ -179,6 +190,7 @@ function App() {
               onPrototypeSelect={handlePrototypeSelect}
               selectedPrototype={selectedPrototype}
               isProcessing={isProcessing}
+              onGenerateOutlineWithStyle={handleGenerateOutlineWithStyle}
             />
           </div>
         )}
