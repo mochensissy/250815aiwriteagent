@@ -315,19 +315,30 @@ export const useAppState = () => {
       console.log('📚 当前知识库状态:', {
         总文章数: appState.knowledgeBase.length,
         案例库: appState.knowledgeBase.filter(a => a.category === 'case').length,
-        记忆库: appState.knowledgeBase.filter(a => a.category === 'memory').length
+        记忆库: appState.knowledgeBase.filter(a => a.category === 'memory').length,
+        详细文章: appState.knowledgeBase.map(a => ({ id: a.id, title: a.title, category: a.category, hasStyleElements: !!a.styleElements?.length }))
       });
       
       const prototypes = await getStylePrototypesFromDraft(draft);
       
-      console.log('📊 推荐结果:', prototypes?.length || 0);
+      console.log('📊 推荐结果数量:', prototypes?.length || 0);
       if (prototypes && prototypes.length > 0) {
         console.log('🎯 推荐详情:', prototypes);
+        prototypes.forEach((p, i) => {
+          console.log(`📖 推荐${i+1}: ${p.title} (${p.similarity}%) - ${p.description}`);
+        });
+      } else {
+        console.log('⚠️ 没有获得推荐结果，可能的原因:');
+        console.log('   - API配置问题');
+        console.log('   - 知识库为空');
+        console.log('   - AI分析失败');
       }
       
-      // 检查是否有推荐的风格原型
+      // 强制检查推荐结果，确保不跳过风格确认环节
+      console.log('🔄 强制检查推荐结果...');
+      
       if (prototypes && prototypes.length > 0) {
-        console.log(`✨ 找到 ${prototypes.length} 个推荐的风格原型，等待用户确认...`);
+        console.log(`✨ 找到 ${prototypes.length} 个推荐的风格原型，暂停流程等待用户确认...`);
         
         // 更新推荐状态
         setStylePrototypes(prototypes);
@@ -345,7 +356,21 @@ export const useAppState = () => {
         }));
         
         toast.success(`找到 ${prototypes.length} 篇相似风格文章，请选择参考风格`);
+        console.log('🛑 流程已暂停，等待用户在界面上选择风格...');
+        setIsProcessing(false); // 停止处理状态
         return; // 不继续执行大纲生成
+      }
+      
+      // 如果确实没有推荐结果，给出明确提示
+      console.log('⚠️ 确认没有风格推荐结果，继续使用通用大纲生成...');
+      
+      // 即使没有推荐，也要让用户明确知道
+      if (appState.knowledgeBase.length > 0) {
+        console.log('📚 知识库不为空但没有匹配结果，可能是:');
+        console.log('   1. 题材差异太大');
+        console.log('   2. 写作特征未提取');
+        console.log('   3. API调用失败');
+        toast.warning('没有找到匹配的风格文章，将使用通用模板生成大纲');
       }
       
       console.log('⚠️ 没有找到推荐的风格原型，继续使用通用风格生成大纲...');

@@ -131,32 +131,58 @@ export const generateImage = async (prompt: string, size = '1024x1024'): Promise
  * 分析文章风格要素
  */
 export const analyzeStyleElements = async (articles: string[]): Promise<string[]> => {
+  const combinedContent = articles.join('\n\n---\n\n');
+  
   const prompt = `
-作为专业的文本风格分析师，请分析以下文章内容，提炼出作者的写作风格特征：
+作为专业的写作特征分析师，请分析以下文章内容，提取作者的写作特征。需要从内容和风格两个维度进行全面分析：
 
-${articles.map((article, index) => `文章${index + 1}:\n${article}\n\n`).join('')}
+文章内容：
+${combinedContent}
 
-请从以下维度分析并提炼风格要素：
-1. 词汇特点（常用词汇、专业术语偏好）
-2. 句法特点（句式结构、语言节奏）
-3. 结构特点（文章组织方式、段落安排）
-4. 修辞特点（比喻手法、表达方式）
+请从以下维度分析写作特征：
 
-每个维度请提供3-5个具体的风格特征描述，格式如："倾向于使用设问句开篇"、"经常使用'底层逻辑'等分析性词汇"等。
+**内容特征（便于题材匹配）：**
+1. 主要题材领域（如：个人成长、职场感悟、生活观察、技能学习、情感表达等）
+2. 常用素材类型（如：个人经历、案例故事、数据引用、理论分析、生活细节等）
+3. 关注焦点（如：内心感受、实用方法、深度思考、现象观察、价值探讨等）
+4. 价值观取向（如：积极正面、理性客观、感性细腻、批判反思、幽默轻松等）
 
-请以JSON数组格式返回，每个元素为一个风格特征描述字符串。
+**表达风格（便于风格匹配）：**
+5. 语言特色（如：口语化亲切、正式严谨、文艺诗意、简洁直接、生动形象等）
+6. 情感色彩（如：温暖治愈、犀利直白、幽默风趣、深沉内敛、激昂热烈等）
+7. 结构习惯（如：故事引入、问题导向、观点先行、层层递进、对比分析等）
+8. 互动方式（如：设问引导、直接对话、经验分享、启发思考、呼吁行动等）
+
+每个特征要具体、准确，有助于后续匹配相似题材和风格的文章。
+
+返回JSON数组格式：
+["具体的特征描述1", "具体的特征描述2", ...]
+
+示例：
+["专注个人成长和自我反思类题材", "善于从生活小事中提炼深层思考", "习惯用故事开头引出观点", "语言温暖亲切，富有共鸣感"]
 `;
 
   try {
     const result = await callGeminiAPI(prompt);
-    // 尝试解析JSON，如果失败则分割文本
+    console.log('🎨 多维度特征分析结果:', result);
+    
     try {
-      return JSON.parse(result);
-    } catch {
-      return result.split('\n').filter(line => line.trim() && !line.includes('```'));
+      const features = JSON.parse(result);
+      console.log('✅ 提取到的写作特征:', features);
+      return features;
+    } catch (parseError) {
+      console.error('❌ 特征分析结果解析失败:', parseError);
+      // 备用解析方法
+      const lines = result.split('\n').filter(line => 
+        line.trim() && 
+        !line.includes('```') && 
+        !line.includes('JSON') &&
+        line.includes('：') || line.includes('"')
+      );
+      return lines.slice(0, 8); // 最多返回8个特征
     }
   } catch (error) {
-    console.error('风格分析失败:', error);
+    console.error('❌ 特征分析API调用失败:', error);
     return [];
   }
 };
@@ -179,7 +205,7 @@ export const recommendStylePrototypes = async (draft: string, referenceArticles:
   }
 
   const prompt = `
-基于用户的草稿内容，从参考文章中推荐最匹配的写作风格原型：
+作为专业的写作风格匹配分析师，请基于用户草稿内容，从参考文章中推荐最匹配的写作参考原型。
 
 用户草稿：
 ${draft}
@@ -187,29 +213,38 @@ ${draft}
 参考文章库：
 ${referenceArticles.map((article, index) => `${index + 1}. ID: ${article.id}
 标题：${article.title}
-内容摘要：${article.content.substring(0, 300)}...
+内容摘要：${article.content.substring(0, 400)}...
+写作特征：${(article.styleElements || []).filter(e => e.confirmed).map(e => e.description).join('; ') || '暂无特征分析'}
 
 `).join('')}
 
-请分析草稿的主题、语气、结构、写作风格，从参考文章中选择1-3个最匹配的文章作为风格原型。
+请从以下维度进行匹配分析：
 
-返回JSON数组格式，每个元素包含：
-- id: 生成唯一ID (格式: "prototype_" + timestamp + "_" + index)
-- title: 参考文章的标题  
-- description: 推荐理由 (为什么这篇文章适合作为风格参考)
-- articleId: 参考文章的ID
-- similarity: 相似度分数(0-100)
+**内容维度（题材匹配）：**
+- 主题相关性：草稿的核心主题与参考文章是否相符
+- 素材类型：使用的素材和论证方式是否相似
+- 价值观倾向：表达的态度和价值取向是否一致
 
-确保返回格式如下：
+**风格维度（表达匹配）：**
+- 语言风格：语言特色和表达方式是否相近
+- 情感色彩：文章的情感调性是否匹配
+- 结构习惯：行文组织和逻辑结构是否相似
+
+选择1-3个最匹配的文章作为风格参考原型，优先考虑题材相关性。
+
+返回JSON数组格式：
 [
   {
     "id": "prototype_${Date.now()}_1",
-    "title": "文章标题",
-    "description": "推荐理由：主题相关性高，写作风格类似...",
-    "articleId": "文章ID", 
-    "similarity": 85
+    "title": "参考文章标题",
+    "description": "推荐理由：题材匹配度高（具体说明），写作风格相似（具体说明）",
+    "articleId": "文章ID",
+    "similarity": 85,
+    "matchReason": "具体的匹配分析"
   }
 ]
+
+要求：相似度评分要准确，推荐理由要具体说明题材和风格的匹配点。
 `;
 
   try {
