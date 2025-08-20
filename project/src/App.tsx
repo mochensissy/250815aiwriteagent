@@ -15,6 +15,7 @@ import ArticleEditor from './components/Editor/ArticleEditor';
 import ImageManager from './components/Images/ImageManager';
 import APIManager from './components/Settings/APIManager';
 import { useAppState } from './hooks/useAppState';
+import { generateOutline } from './utils/api';
 import { KnowledgeBaseArticle, StylePrototype } from './types';
 import { generateImage } from './utils/api';
 
@@ -224,7 +225,7 @@ function App() {
                 if (draft) {
                   console.log('🚀 强制生成大纲（跳过风格推荐）...');
                   try {
-                    const { generateOutline } = await import('../utils/api');
+                    // 直接调用已经导入的函数
                     const aiOutline = await generateOutline(draft, '通用写作风格');
                     console.log('🔍 AI大纲结果:', aiOutline);
                     
