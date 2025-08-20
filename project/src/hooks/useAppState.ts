@@ -326,16 +326,26 @@ export const useAppState = () => {
       const prototypes = await getStylePrototypesFromDraft(draft);
       
       console.log('📊 推荐结果数量:', prototypes?.length || 0);
+      console.log('📊 推荐结果详情:', prototypes);
+      
       if (prototypes && prototypes.length > 0) {
-        console.log('🎯 推荐详情:', prototypes);
+        console.log('🎯 找到推荐文章:');
         prototypes.forEach((p, i) => {
           console.log(`📖 推荐${i+1}: ${p.title} (${p.similarity}%) - ${p.description}`);
         });
       } else {
-        console.log('⚠️ 没有获得推荐结果，可能的原因:');
-        console.log('   - API配置问题');
-        console.log('   - 知识库为空');
-        console.log('   - AI分析失败');
+        console.log('⚠️ 没有获得推荐结果，详细诊断:');
+        console.log('   📚 知识库文章数:', appState.knowledgeBase.length);
+        console.log('   📁 案例库文章:', appState.knowledgeBase.filter(a => a.category === 'case').map(a => a.title));
+        console.log('   🧠 记忆库文章:', appState.knowledgeBase.filter(a => a.category === 'memory').map(a => a.title));
+        console.log('   ⚙️ API配置状态:', localStorage.getItem('apiConfig') ? '已配置' : '未配置');
+        
+        // 检查是否有风格要素
+        const articlesWithStyle = appState.knowledgeBase.filter(a => a.styleElements && a.styleElements.length > 0);
+        console.log('   🎨 有风格要素的文章:', articlesWithStyle.length, '篇');
+        articlesWithStyle.forEach(a => {
+          console.log(`     - ${a.title}: ${a.styleElements?.length || 0} 个要素`);
+        });
       }
       
       // 强制检查推荐结果，确保不跳过风格确认环节
@@ -808,10 +818,14 @@ ${appState.currentArticle.outline.map(node => {
       toast.success('风格要素已删除');
     }
     
-    // 保存更新后的知识库
+    // 立即保存更新后的知识库，确保状态持久化
+    console.log('💾 立即保存风格要素状态到localStorage...');
+    // 需要使用更新后的状态，而不是旧的appState.knowledgeBase
     setTimeout(() => {
-      saveKnowledgeBase(appState.knowledgeBase);
-    }, 100);
+      // 重新获取最新的状态进行保存
+      const currentState = JSON.parse(localStorage.getItem('knowledgeBase') || '[]');
+      console.log('✅ 风格要素状态已保存，当前状态:', currentState.length, '篇文章');
+    }, 200);
   };
 
   // 更新API配置
@@ -830,6 +844,12 @@ ${appState.currentArticle.outline.map(node => {
       saveCurrentArticle(appState.currentArticle);
     }
   }, [appState.currentArticle]);
+
+  // 监听知识库变化，自动保存
+  useEffect(() => {
+    console.log('📚 知识库状态变化，自动保存...');
+    saveKnowledgeBase(appState.knowledgeBase);
+  }, [appState.knowledgeBase]);
 
   return {
     appState,
