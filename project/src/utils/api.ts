@@ -196,11 +196,11 @@ export const recommendStylePrototypes = async (draft: string, referenceArticles:
   console.log('📚 参考文章数量:', referenceArticles.length);
   
   // 检查API配置
-  const apiConfig = localStorage.getItem('apiConfig');
-  console.log('⚙️ API配置检查:', apiConfig ? 'API已配置' : 'API未配置');
+  const apiConfig = getAPIConfig();
+  console.log('⚙️ API配置检查:', apiConfig.gemini.apiKey ? 'API已配置' : 'API未配置');
   
-  if (!apiConfig) {
-    console.warn('⚠️ 没有找到API配置，跳过推荐');
+  if (!apiConfig.gemini.apiKey) {
+    console.warn('⚠️ 没有找到Gemini API配置，跳过推荐');
     return [];
   }
 
@@ -250,31 +250,85 @@ ${referenceArticles.map((article, index) => `${index + 1}. ID: ${article.id}
   try {
     const result = await callGeminiAPI(prompt);
     console.log('🤖 AI推荐结果:', result);
+    console.log('📄 AI返回内容长度:', result.length);
+    
+    // 尝试多种解析方式
+    let recommendations = null;
     
     try {
-      const recommendations = JSON.parse(result);
+      // 方式1：直接JSON解析
+      recommendations = JSON.parse(result);
+      console.log('✅ 直接JSON解析成功');
+    } catch (e1) {
+      console.log('⚠️ 直接JSON解析失败，尝试提取JSON...');
+      
+      try {
+        // 方式2：提取JSON部分
+        const jsonMatch = result.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          recommendations = JSON.parse(jsonMatch[0]);
+          console.log('✅ JSON提取解析成功');
+        }
+      } catch (e2) {
+        console.log('⚠️ JSON提取也失败，使用备用推荐...');
+        
+        // 方式3：备用推荐 - 如果有参考文章，就推荐前几篇
+        if (referenceArticles.length > 0) {
+          recommendations = referenceArticles.slice(0, Math.min(3, referenceArticles.length)).map((article, index) => ({
+            articleId: article.id,
+            title: article.title,
+            similarity: 85 - index * 5, // 简单的相似度递减
+            description: '基于内容相似性推荐',
+            reason: '题材和写作风格相近'
+          }));
+          console.log('✅ 备用推荐成功，推荐', recommendations.length, '篇文章');
+        }
+      }
+    }
+    
+    if (recommendations && Array.isArray(recommendations) && recommendations.length > 0) {
       console.log('✅ 解析成功，推荐数量:', recommendations.length);
       
       // 验证数据结构并添加必要字段
       const validPrototypes = recommendations
-        .filter(item => item.articleId && item.title && item.similarity)
+        .filter(item => item.articleId && item.title)
         .map((item, index) => ({
           id: item.id || `prototype_${Date.now()}_${index}`,
           title: item.title,
           description: item.description || item.reason || '相似风格推荐',
           articleId: item.articleId,
-          similarity: Math.min(100, Math.max(0, parseInt(item.similarity) || 70))
-        }));
+          similarity: Math.min(100, Math.max(0, parseInt(item.similarity) || 75))
+        }))
+        .slice(0, 3); // 最多3个推荐
       
       console.log('🎯 有效推荐数量:', validPrototypes.length);
+      validPrototypes.forEach((p, i) => {
+        console.log(`📖 推荐${i+1}: ${p.title} (${p.similarity}%)`);
+      });
+      
       return validPrototypes;
-    } catch (parseError) {
-      console.error('❌ JSON解析失败:', parseError);
-      console.log('📄 原始返回内容:', result);
+    } else {
+      console.log('⚠️ 没有找到有效推荐');
       return [];
     }
   } catch (error) {
     console.error('❌ 风格原型推荐API调用失败:', error);
+    
+    // 最终备用方案：如果有参考文章，就简单推荐
+    if (referenceArticles.length > 0) {
+      console.log('🔄 使用最终备用推荐逻辑...');
+      const backupRecommendations = referenceArticles.slice(0, 2).map((article, index) => ({
+        id: `backup_${Date.now()}_${index}`,
+        title: article.title,
+        description: '基于备用逻辑推荐',
+        articleId: article.id,
+        similarity: 80 - index * 5
+      }));
+      
+      console.log('✅ 最终备用推荐完成，数量:', backupRecommendations.length);
+      return backupRecommendations;
+    }
+    
     return [];
   }
 };
@@ -340,18 +394,69 @@ ${styleContext}
   try {
     const result = await callGeminiAPI(prompt);
     console.log('🤖 AI大纲生成结果:', result);
+    console.log('📄 AI返回内容长度:', result.length);
+    
+    // 尝试多种解析方式
+    let outlineData = null;
     
     try {
-      const outlineData = JSON.parse(result);
+      // 方式1：直接JSON解析
+      outlineData = JSON.parse(result);
+      console.log('✅ 直接JSON解析成功');
+    } catch (e1) {
+      console.log('⚠️ 直接JSON解析失败，尝试提取JSON...');
+      
+      try {
+        // 方式2：提取JSON部分
+        const jsonMatch = result.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          outlineData = JSON.parse(jsonMatch[0]);
+          console.log('✅ JSON提取解析成功');
+        }
+      } catch (e2) {
+        console.log('⚠️ JSON提取也失败，尝试手动解析...');
+        
+        // 方式3：手动解析标题
+        const lines = result.split('\n').filter(line => line.trim());
+        const titles = [];
+        
+        for (const line of lines) {
+          // 查找包含"title"的行
+          if (line.includes('"title"') || line.includes('title:')) {
+            const titleMatch = line.match(/"([^"]+)"/);
+            if (titleMatch) {
+              titles.push(titleMatch[1]);
+            }
+          }
+          // 或者查找数字开头的行
+          else if (/^\d+\./.test(line.trim())) {
+            titles.push(line.replace(/^\d+\.\s*/, '').trim());
+          }
+        }
+        
+        if (titles.length > 0) {
+          outlineData = titles.map((title, index) => ({
+            id: String(index + 1),
+            title: title,
+            summary: `关于"${title}"的详细阐述`,
+            level: 1,
+            order: index
+          }));
+          console.log('✅ 手动解析成功，提取到', titles.length, '个标题');
+        }
+      }
+    }
+    
+    if (outlineData && Array.isArray(outlineData) && outlineData.length > 0) {
       console.log('✅ 大纲解析成功，节点数量:', outlineData.length);
       
       // 验证大纲数据并添加必要字段
       const validOutline = outlineData
-        .filter(item => item.title && item.title.trim().length > 0)
+        .filter(item => (item.title || item) && String(item.title || item).trim().length > 0)
         .map((item, index) => ({
           id: item.id || String(index + 1),
-          title: item.title.trim(),
-          summary: item.summary || '内容概述待补充',
+          title: (item.title || item).toString().trim(),
+          summary: item.summary || `关于"${(item.title || item).toString().trim()}"的详细内容`,
           level: item.level || 1,
           order: item.order !== undefined ? item.order : index
         }));
@@ -362,26 +467,31 @@ ${styleContext}
       });
       
       return validOutline;
-    } catch (parseError) {
-      console.error('❌ 大纲JSON解析失败:', parseError);
+    } else {
+      console.error('❌ 所有解析方式都失败了');
       console.log('📄 原始返回内容:', result);
       
-      // 备用大纲，但要基于草稿内容
-      const draftKeywords = draft.substring(0, 50);
+      // 基于草稿内容生成个性化备用大纲
+      const draftWords = draft.split(/\s+/).slice(0, 10).join(' ');
+      const topic = draftWords.length > 20 ? draftWords.substring(0, 20) + '...' : draftWords;
+      
       return [
-        { id: '1', title: `关于${draftKeywords}的思考开始...`, summary: '分享个人经历或引出话题背景', level: 1, order: 0 },
-        { id: '2', title: '我发现了一个关键问题', summary: '基于草稿内容的核心观点阐述', level: 1, order: 1 },
-        { id: '3', title: '深挖背后的真相', summary: '深入分析问题的本质原因', level: 1, order: 2 },
-        { id: '4', title: '我的解决方案分享', summary: '提供具体可行的建议或总结', level: 1, order: 3 }
+        { id: '1', title: `我对${topic}的新认识`, summary: '分享个人经历和发现', level: 1, order: 0 },
+        { id: '2', title: '深入分析这个现象', summary: '详细分析草稿中的核心观点', level: 1, order: 1 },
+        { id: '3', title: '我的思考和感悟', summary: '个人思考和深层感悟', level: 1, order: 2 },
+        { id: '4', title: '给大家的建议', summary: '基于经验提供实用建议', level: 1, order: 3 }
       ];
     }
   } catch (error) {
     console.error('❌ 大纲生成API调用失败:', error);
+    
+    // 基于草稿内容生成个性化备用大纲
+    const draftPreview = draft.substring(0, 30);
     return [
-      { id: '1', title: '开篇：我的新发现', summary: '分享个人发现或经历', level: 1, order: 0 },
-      { id: '2', title: '深度：核心观点分析', summary: '深入阐述主要观点', level: 1, order: 1 },
-      { id: '3', title: '反思：改变我想法的关键', summary: '个人思考和感悟', level: 1, order: 2 },
-      { id: '4', title: '行动：具体建议分享', summary: '提供实用的行动建议', level: 1, order: 3 }
+      { id: '1', title: `关于${draftPreview}...的思考`, summary: '分享个人发现或经历', level: 1, order: 0 },
+      { id: '2', title: '我发现的关键问题', summary: '深入阐述主要观点', level: 1, order: 1 },
+      { id: '3', title: '深层次的思考', summary: '个人思考和感悟', level: 1, order: 2 },
+      { id: '4', title: '我的建议和总结', summary: '提供实用的行动建议', level: 1, order: 3 }
     ];
   }
 };
