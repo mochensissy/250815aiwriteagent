@@ -196,6 +196,28 @@ function App() {
             >
               调试状态
             </button>
+            
+            <button
+              onClick={() => {
+                console.log('🔍 localStorage详细检查:');
+                console.log('=== 所有localStorage数据 ===');
+                for (let i = 0; i < localStorage.length; i++) {
+                  const key = localStorage.key(i);
+                  const value = localStorage.getItem(key);
+                  console.log(`${key}:`, value);
+                }
+                console.log('=== 特定key检查 ===');
+                console.log('知识库数据(正确key):', localStorage.getItem('ai_writer_knowledge_base'));
+                console.log('知识库数据(旧key):', localStorage.getItem('knowledgeBase'));
+                console.log('API配置:', localStorage.getItem('ai_writer_api_config'));
+                console.log('当前文章:', localStorage.getItem('ai_writer_current_article'));
+                alert('localStorage数据已打印到控制台，请查看！');
+              }}
+              className="flex items-center gap-2 px-3 py-1 text-xs bg-red-100 text-red-700 hover:bg-red-200 rounded-lg transition-colors"
+            >
+              检查存储
+            </button>
+            
             <button
               onClick={() => setShowAPIManager(true)}
               className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"

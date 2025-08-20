@@ -29,24 +29,13 @@ import {
 import toast from 'react-hot-toast';
 
 export const useAppState = () => {
-  const [appState, setAppState] = useState<AppState>({
-    knowledgeBase: [],
-    termMappings: [],
-    writingRules: [],
-    apiConfig: getAPIConfig()
-  });
-
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [stylePrototypes, setStylePrototypes] = useState<StylePrototype[]>([]);
-
-  // 初始化数据
-  useEffect(() => {
-    console.log('🚀 初始化应用状态...');
+  // 直接从localStorage初始化状态，避免竞态条件
+  const [appState, setAppState] = useState<AppState>(() => {
+    console.log('🚀 初始化应用状态（useState回调）...');
     const knowledgeBase = getKnowledgeBase();
-    const currentArticle = getCurrentArticle();
     const apiConfig = getAPIConfig();
     
-    console.log('📖 从localStorage加载的数据:', {
+    console.log('📖 从localStorage初始化的数据:', {
       知识库文章数: knowledgeBase.length,
       知识库详情: knowledgeBase.map(a => ({
         id: a.id,
@@ -55,16 +44,32 @@ export const useAppState = () => {
         风格要素数量: a.styleElements?.length || 0,
         已确认要素: a.styleElements?.filter(e => e.confirmed).length || 0
       })),
-      当前文章: currentArticle ? '有' : '无',
       API配置: apiConfig ? '已配置' : '未配置'
     });
     
-    setAppState(prev => ({
-      ...prev,
+    return {
       knowledgeBase,
-      currentArticle: currentArticle || undefined,
+      termMappings: [],
+      writingRules: [],
       apiConfig
-    }));
+    };
+  });
+
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [stylePrototypes, setStylePrototypes] = useState<StylePrototype[]>([]);
+
+  // 初始化当前文章数据
+  useEffect(() => {
+    console.log('🔄 加载当前文章数据...');
+    const currentArticle = getCurrentArticle();
+    
+    if (currentArticle) {
+      console.log('📝 找到保存的当前文章:', currentArticle.title);
+      setAppState(prev => ({
+        ...prev,
+        currentArticle
+      }));
+    }
   }, []);
 
   // 添加文章到知识库
