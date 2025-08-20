@@ -48,6 +48,7 @@ function App() {
   const [selectedPrototype, setSelectedPrototype] = useState<StylePrototype>();
   const [showAPIManager, setShowAPIManager] = useState(false);
   const [currentDraft, setCurrentDraft] = useState<string>(''); // 保存当前草稿内容
+  const [processingStatus, setProcessingStatus] = useState<string>('处理中...'); // 处理状态文本
 
   // 处理文章选择
   const handleArticleSelect = (article: KnowledgeBaseArticle) => {
@@ -74,23 +75,30 @@ function App() {
     console.log('提交草稿:', draft.substring(0, 100) + '...', '平台:', platform);
     
     try {
-      // 保存草稿内容
+      // 第一步：保存草稿内容
+      setProcessingStatus('正在保存草稿...');
       setCurrentDraft(draft);
       
-      // 创建基础文章状态（不包含大纲）
+      // 第二步：创建基础文章状态
+      setProcessingStatus('初始化文章状态...');
       await startNewArticle(draft, platform);
       
-      // 推荐风格原型并直接获取结果
+      // 第三步：AI推荐风格原型
+      setProcessingStatus('AI正在分析您的写作风格...');
       console.log('🔍 开始推荐风格原型...');
       const recommendedPrototypes = await recommendStylePrototypesFromDraft(draft);
       
       console.log('📊 推荐结果数量:', recommendedPrototypes.length);
       
-      // 根据推荐结果决定跳转页面
+      // 第四步：根据推荐结果决定跳转页面
       if (recommendedPrototypes.length > 0) {
+        setProcessingStatus('找到匹配文章，准备选择界面...');
         console.log('✅ 有推荐文章，跳转到选择页面');
-        setCurrentView('selection');
+        setTimeout(() => {
+          setCurrentView('selection');
+        }, 500); // 给用户一点时间看到成功状态
       } else {
+        setProcessingStatus('生成通用大纲中...');
         console.log('⚠️ 没有推荐文章，生成通用大纲并跳转到大纲页面');
         // 没有推荐文章时，直接生成通用大纲
         await generateOutlineFromDraft(draft, '通用写作风格');
@@ -98,8 +106,11 @@ function App() {
       }
     } catch (error) {
       console.error('❌ 草稿处理失败:', error);
-      // 即使出错也提供基础流程
-      setCurrentView('outline');
+      setProcessingStatus('处理失败，请重试');
+      // 3秒后重置状态
+      setTimeout(() => {
+        setProcessingStatus('处理中...');
+      }, 3000);
     }
   };
 
@@ -313,7 +324,7 @@ function App() {
         </div>
 
         {currentView === 'draft' && (
-          <div className="flex-1 flex items-center justify-center p-8 bg-white">
+          <div className="flex-1 flex items-center justify-center p-8 bg-white relative">
             <DraftInput
               onSubmit={handleDraftSubmit}
               onExternalSearch={handleExternalSearch}
@@ -321,8 +332,26 @@ function App() {
               onPrototypeSelect={handlePrototypeSelect}
               selectedPrototype={selectedPrototype}
               isProcessing={isProcessing}
+              processingStatus={processingStatus}
               onGenerateOutlineWithStyle={handleGenerateOutlineWithStyle}
             />
+            
+            {/* 全屏加载遮罩 */}
+            {isProcessing && (
+              <div className="absolute inset-0 bg-white bg-opacity-80 flex items-center justify-center z-50">
+                <div className="bg-white rounded-2xl shadow-2xl p-8 flex flex-col items-center max-w-md mx-auto">
+                  <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">AI正在处理</h3>
+                  <p className="text-gray-600 text-center leading-relaxed">
+                    {processingStatus}
+                  </p>
+                  <div className="mt-4 w-full bg-gray-200 rounded-full h-2">
+                    <div className="bg-gradient-to-r from-blue-600 to-purple-600 h-2 rounded-full animate-pulse" style={{width: '60%'}}></div>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-2">请稍候，正在为您匹配最佳文章...</p>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

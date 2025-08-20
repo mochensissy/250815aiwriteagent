@@ -112,8 +112,6 @@ export interface AppState {
     content: string;
     images: GeneratedImage[];
     coverImage?: GeneratedImage;
-    selectedStyleContext?: string; // 选择的风格上下文，用于一致性生成
-    selectedPrototypes?: StylePrototype[]; // 选择的风格原型
   };
   knowledgeBase: KnowledgeBaseArticle[];
   termMappings: TermMapping[];
