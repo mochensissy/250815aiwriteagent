@@ -219,6 +219,51 @@ function App() {
             </button>
             
             <button
+              onClick={async () => {
+                const draft = prompt('请输入草稿内容：');
+                if (draft) {
+                  console.log('🚀 强制生成大纲（跳过风格推荐）...');
+                  try {
+                    const { generateOutline } = await import('../utils/api');
+                    const aiOutline = await generateOutline(draft, '通用写作风格');
+                    console.log('🔍 AI大纲结果:', aiOutline);
+                    
+                    if (aiOutline && Array.isArray(aiOutline) && aiOutline.length > 0) {
+                      const outline = aiOutline.map((node, index) => ({
+                        id: String(index + 1),
+                        title: node.title || `章节 ${index + 1}`,
+                        summary: node.summary || '内容概述待补充',
+                        level: node.level || 1,
+                        order: index
+                      }));
+                      
+                      setAppState(prev => ({
+                        ...prev,
+                        currentArticle: {
+                          title: '测试文章',
+                          draft,
+                          outline,
+                          content: '',
+                          images: []
+                        }
+                      }));
+                      setCurrentView('outline');
+                      alert('大纲生成成功！');
+                    } else {
+                      alert('AI大纲生成失败，请查看控制台');
+                    }
+                  } catch (error) {
+                    console.error('❌ 强制大纲生成失败:', error);
+                    alert('大纲生成失败：' + error.message);
+                  }
+                }
+              }}
+              className="flex items-center gap-2 px-3 py-1 text-xs bg-green-100 text-green-700 hover:bg-green-200 rounded-lg transition-colors"
+            >
+              强制生成大纲
+            </button>
+            
+            <button
               onClick={() => setShowAPIManager(true)}
               className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
               title="API管理"
