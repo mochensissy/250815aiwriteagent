@@ -10,6 +10,7 @@ import { Toaster } from 'react-hot-toast';
 import { Settings } from 'lucide-react';
 import Sidebar from './components/Layout/Sidebar';
 import DraftInput from './components/Writing/DraftInput';
+import ArticleSelection from './components/Writing/ArticleSelection';
 import OutlineEditor from './components/Editor/OutlineEditor';
 import ArticleEditor from './components/Editor/ArticleEditor';
 import ImageManager from './components/Images/ImageManager';
@@ -29,6 +30,7 @@ function App() {
     updateStyleElement,
     recommendStylePrototypesFromDraft,
     generateOutlineWithSelectedStyle,
+    generateOutlineFromDraft,
     createTestCaseData,
     startNewArticle,
     generateArticle,
@@ -42,9 +44,10 @@ function App() {
     updateAPIConfig
   } = useAppState();
 
-  const [currentView, setCurrentView] = useState<'draft' | 'outline' | 'editor'>('draft');
+  const [currentView, setCurrentView] = useState<'draft' | 'selection' | 'outline' | 'editor'>('draft');
   const [selectedPrototype, setSelectedPrototype] = useState<StylePrototype>();
   const [showAPIManager, setShowAPIManager] = useState(false);
+  const [currentDraft, setCurrentDraft] = useState<string>(''); // 保存当前草稿内容
 
   // 处理文章选择
   const handleArticleSelect = (article: KnowledgeBaseArticle) => {
@@ -70,27 +73,49 @@ function App() {
   const handleDraftSubmit = async (draft: string, platform: string) => {
     console.log('提交草稿:', draft.substring(0, 100) + '...', '平台:', platform);
     
-    // 如果草稿长度足够且案例库不为空，先推荐风格原型
-    if (draft.length > 100) {
-      const caseArticles = appState.knowledgeBase.filter(a => a.category === 'case');
-      if (caseArticles.length > 0) {
-        console.log('🎨 草稿足够长且有案例库，先推荐风格原型...');
-        await recommendStylePrototypesFromDraft(draft);
-      }
-    }
+    // 保存草稿内容
+    setCurrentDraft(draft);
     
+    // 推荐风格原型
+    await recommendStylePrototypesFromDraft(draft);
+    
+    // 创建基础文章状态（不包含大纲）
     await startNewArticle(draft, platform);
-    // 如果有推荐的风格原型，停留在草稿页面等待用户确认
+    
+    // 如果有推荐的风格原型，跳转到选择页面
     // 否则直接跳转到大纲页面
-    if (stylePrototypes.length === 0) {
+    if (stylePrototypes.length > 0) {
+      setCurrentView('selection');
+    } else {
       setCurrentView('outline');
     }
   };
 
-  // 处理用户确认风格并生成大纲
+  // 处理用户确认风格并生成大纲（从草稿页面）
   const handleGenerateOutlineWithStyle = async (selectedPrototypes: StylePrototype[]) => {
     await generateOutlineWithSelectedStyle(selectedPrototypes);
     setCurrentView('outline'); // 生成大纲后跳转到大纲页面
+  };
+
+  // 处理文章选择页面的确认选择
+  const handleConfirmArticleSelection = async (selectedPrototypes: StylePrototype[]) => {
+    await generateOutlineWithSelectedStyle(selectedPrototypes);
+    setCurrentView('outline');
+  };
+
+  // 处理跳过文章选择
+  const handleSkipArticleSelection = async () => {
+    // 使用通用模板生成大纲
+    if (appState.currentArticle) {
+      // 直接使用通用风格生成大纲
+      await generateOutlineFromDraft(appState.currentArticle.draft, '通用写作风格');
+    }
+    setCurrentView('outline');
+  };
+
+  // 从文章选择页面返回草稿页面
+  const handleBackToDraft = () => {
+    setCurrentView('draft');
   };
 
   // 处理大纲生成完成
@@ -289,16 +314,30 @@ function App() {
           </div>
         )}
 
+        {currentView === 'selection' && (
+          <div className="flex-1 p-8 bg-white">
+            <ArticleSelection
+              draft={currentDraft}
+              stylePrototypes={stylePrototypes}
+              knowledgeBase={appState.knowledgeBase}
+              onBack={handleBackToDraft}
+              onConfirmSelection={handleConfirmArticleSelection}
+              onSkipSelection={handleSkipArticleSelection}
+              isProcessing={isProcessing}
+            />
+          </div>
+        )}
+
         {currentView === 'outline' && appState.currentArticle && (
           <div className="flex-1 p-8 bg-white">
             <div className="max-w-4xl mx-auto">
               <div className="mb-8">
                 <div className="flex items-center gap-4 mb-4">
                   <button
-                    onClick={() => setCurrentView('draft')}
+                    onClick={() => setCurrentView(stylePrototypes.length > 0 ? 'selection' : 'draft')}
                     className="text-blue-600 hover:text-blue-700 text-sm transition-colors font-medium flex items-center"
                   >
-                    ← 返回草稿
+                    ← {stylePrototypes.length > 0 ? '返回文章选择' : '返回草稿'}
                   </button>
                   {appState.currentArticle.content && (
                     <button
@@ -338,6 +377,12 @@ function App() {
                     className="text-blue-600 hover:text-blue-700 text-sm transition-colors font-medium flex items-center"
                   >
                     ← 返回大纲
+                  </button>
+                  <button
+                    onClick={() => setCurrentView(stylePrototypes.length > 0 ? 'selection' : 'draft')}
+                    className="text-gray-600 hover:text-gray-700 text-sm transition-colors font-medium"
+                  >
+                    重新选择文章
                   </button>
                   <button
                     onClick={() => setCurrentView('draft')}

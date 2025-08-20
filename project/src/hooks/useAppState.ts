@@ -286,164 +286,76 @@ export const useAppState = () => {
   const generateOutlineWithSelectedStyle = async (selectedPrototypes: StylePrototype[]) => {
     if (!appState.currentArticle) return;
     
-    setIsProcessing(true);
-    
     try {
       console.log('🎨 使用选定的风格生成大纲...');
+      console.log('📊 选定的原型数量:', selectedPrototypes.length);
       
-      // 获取选定文章的风格要素
-      const selectedStyleElements = selectedPrototypes.flatMap(prototype => {
-        const article = appState.knowledgeBase.find(a => a.id === prototype.articleId);
-        return article?.styleElements?.filter(e => e.confirmed).map(e => e.description) || [];
-      });
+      let styleContext = '';
       
-      const styleContext = selectedStyleElements.join('; ');
-      console.log('🎨 选定的风格上下文:', styleContext);
-      
-              // 调用AI生成大纲
-        const { generateOutline } = await import('../utils/api');
-        const aiOutline = await generateOutline(appState.currentArticle.draft, styleContext || '通用写作风格');
+      if (selectedPrototypes.length > 0) {
+        // 获取选定文章的风格要素
+        const selectedStyleElements = selectedPrototypes.flatMap(prototype => {
+          const article = appState.knowledgeBase.find(a => a.id === prototype.articleId);
+          console.log(`📖 处理文章: ${article?.title}, 风格要素数量: ${article?.styleElements?.length || 0}`);
+          return article?.styleElements?.filter(e => e.confirmed).map(e => e.description) || [];
+        });
         
-        console.log('🎯 生成的大纲结果:', aiOutline);
-      
-      // 处理AI生成的大纲
-      let finalOutline: OutlineNode[];
-      if (aiOutline && Array.isArray(aiOutline) && aiOutline.length > 0) {
-        console.log('✅ AI大纲生成成功，节点数量:', aiOutline.length);
-        finalOutline = aiOutline.map((node, index) => ({
-          id: String(index + 1),
-          title: node.title || `章节 ${index + 1}`,
-          summary: node.summary || '内容概述待补充',
-          level: node.level || 1,
-          order: index
-        }));
+        styleContext = selectedStyleElements.join('; ');
+        console.log('🎨 选定的风格上下文:', styleContext);
       } else {
-        console.log('⚠️ AI生成失败，使用备用大纲');
-        finalOutline = [
-          { id: '1', title: '开篇：引出话题', summary: '分享个人经历，引出核心话题', level: 1, order: 0 },
-          { id: '2', title: '核心观点展开', summary: '详细阐述草稿中的主要观点', level: 1, order: 1 },
-          { id: '3', title: '个人思考感悟', summary: '分享个人的深入思考和感悟', level: 1, order: 2 },
-          { id: '4', title: '结语：呼应升华', summary: '总结观点，给出行动建议', level: 1, order: 3 }
-        ];
+        // 如果没有选定原型，使用所有确认的风格要素
+        const allStyleElements = appState.knowledgeBase
+          .filter(a => a.category === 'memory')
+          .flatMap(a => a.styleElements || [])
+          .filter(e => e.confirmed)
+          .map(e => e.description);
+        
+        styleContext = allStyleElements.join('; ');
+        console.log('🎨 使用通用风格上下文:', styleContext);
       }
       
-      // 更新文章状态
-      setAppState(prev => ({
-        ...prev,
-        currentArticle: prev.currentArticle ? {
-          ...prev.currentArticle,
-          outline: finalOutline
-        } : undefined
-      }));
+      // 使用新的大纲生成函数
+      await generateOutlineFromDraft(appState.currentArticle.draft, styleContext || '通用写作风格');
       
-      toast.success('大纲已生成！');
     } catch (error) {
       console.error('大纲生成失败:', error);
       toast.error('大纲生成失败，请重试');
-    } finally {
-      setIsProcessing(false);
     }
   };
 
-  // 开始新文章创作
+  // 开始新文章创作（仅创建基础状态，不生成大纲）
   const startNewArticle = async (draft: string, platform: string = '公众号') => {
     console.log('🚀 startNewArticle 函数被调用');
     console.log('📝 传入参数 - 草稿长度:', draft?.length || 0);
     console.log('🎯 传入参数 - 目标平台:', platform);
     
+    try {
+      console.log('✅ 创建基础文章状态');
+      
+      // 创建基础的文章状态，不包含大纲
+      setAppState(prev => ({
+        ...prev,
+        currentArticle: {
+          title: '新文章',
+          draft,
+          outline: [], // 空大纲，等待后续生成
+          content: '',
+          images: []
+        }
+      }));
+
+      console.log('📋 基础文章状态已创建');
+    } catch (error) {
+      console.error('❌ 创建文章状态失败:', error);
+      toast.error(`创建失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  };
+
+  // 生成大纲（独立函数）
+  const generateOutlineFromDraft = async (draft: string, styleContext?: string) => {
     setIsProcessing(true);
     
     try {
-      console.log('✅ 开始创作新文章流程');
-      console.log('📝 草稿内容预览:', draft.substring(0, 100) + '...');
-      
-      // 先推荐风格原型，并直接在函数内返回结果
-      console.log('🔍 推荐风格原型...');
-      console.log('📚 当前知识库状态:', {
-        总文章数: appState.knowledgeBase.length,
-        案例库: appState.knowledgeBase.filter(a => a.category === 'case').length,
-        记忆库: appState.knowledgeBase.filter(a => a.category === 'memory').length,
-        详细文章: appState.knowledgeBase.map(a => ({ id: a.id, title: a.title, category: a.category, hasStyleElements: !!a.styleElements?.length }))
-      });
-      
-      const prototypes = await getStylePrototypesFromDraft(draft);
-      
-      console.log('📊 推荐结果数量:', prototypes?.length || 0);
-      console.log('📊 推荐结果详情:', prototypes);
-      
-      if (prototypes && prototypes.length > 0) {
-        console.log('🎯 找到推荐文章:');
-        prototypes.forEach((p, i) => {
-          console.log(`📖 推荐${i+1}: ${p.title} (${p.similarity}%) - ${p.description}`);
-        });
-      } else {
-        console.log('⚠️ 没有获得推荐结果，详细诊断:');
-        console.log('   📚 知识库文章数:', appState.knowledgeBase.length);
-        console.log('   📁 案例库文章:', appState.knowledgeBase.filter(a => a.category === 'case').map(a => a.title));
-        console.log('   🧠 记忆库文章:', appState.knowledgeBase.filter(a => a.category === 'memory').map(a => a.title));
-        console.log('   ⚙️ API配置状态:', localStorage.getItem('apiConfig') ? '已配置' : '未配置');
-        
-        // 检查是否有风格要素
-        const articlesWithStyle = appState.knowledgeBase.filter(a => a.styleElements && a.styleElements.length > 0);
-        console.log('   🎨 有风格要素的文章:', articlesWithStyle.length, '篇');
-        articlesWithStyle.forEach(a => {
-          console.log(`     - ${a.title}: ${a.styleElements?.length || 0} 个要素`);
-        });
-      }
-      
-      // 强制检查推荐结果，确保不跳过风格确认环节
-      console.log('🔄 强制检查推荐结果...');
-      
-      if (prototypes && prototypes.length > 0) {
-        console.log(`✨ 找到 ${prototypes.length} 个推荐的风格原型，暂停流程等待用户确认...`);
-        
-        // 更新推荐状态
-        setStylePrototypes(prototypes);
-        
-        // 创建临时的文章状态，包含草稿但没有大纲
-        setAppState(prev => ({
-          ...prev,
-          currentArticle: {
-            title: '新文章',
-            draft,
-            outline: [], // 空大纲，等待用户确认风格后生成
-            content: '',
-            images: []
-          }
-        }));
-        
-        toast.success(`找到 ${prototypes.length} 篇相似风格文章，请选择参考风格`);
-        console.log('🛑 流程已暂停，等待用户在界面上选择风格...');
-        setIsProcessing(false); // 停止处理状态
-        return; // 不继续执行大纲生成
-      }
-      
-      // 如果确实没有推荐结果，给出明确提示
-      console.log('⚠️ 确认没有风格推荐结果，继续使用通用大纲生成...');
-      
-      // 即使没有推荐，也要让用户明确知道
-      if (appState.knowledgeBase.length > 0) {
-        console.log('📚 知识库不为空但没有匹配结果，可能是:');
-        console.log('   1. 题材差异太大');
-        console.log('   2. 写作特征未提取');
-        console.log('   3. API调用失败');
-        toast('没有找到匹配的风格文章，将使用通用模板生成大纲', { icon: '⚠️' });
-      }
-      
-      console.log('⚠️ 没有找到推荐的风格原型，继续使用通用风格生成大纲...');
-      
-      // 如果没有推荐的风格原型，使用所有确认的风格要素
-      const allStyleElements = appState.knowledgeBase
-        .filter(a => a.category === 'memory')
-        .flatMap(a => a.styleElements || [])
-        .filter(e => e.confirmed) // 只使用已确认的风格要素
-        .map(e => e.description);
-      
-      const styleContext = allStyleElements.join('; ');
-      console.log('🎨 风格上下文:', styleContext || '无风格上下文');
-      console.log('📊 可用风格要素数量:', allStyleElements.length);
-      
-      // 调用AI生成大纲
       console.log('🤖 调用AI生成个性化大纲...');
       console.log('📝 传入草稿内容（前200字符）:', draft.substring(0, 200) + '...');
       console.log('🎨 传入风格上下文:', styleContext || '通用写作风格');
@@ -452,14 +364,11 @@ export const useAppState = () => {
       const aiOutline = await generateOutline(draft, styleContext || '通用写作风格');
       
       console.log('🔍 AI返回的原始结果:', aiOutline);
-      console.log('🔍 AI结果类型:', typeof aiOutline);
-      console.log('🔍 AI结果是否为数组:', Array.isArray(aiOutline));
       
       // 如果AI生成失败，使用备用大纲
       let finalOutline: OutlineNode[];
       if (aiOutline && Array.isArray(aiOutline) && aiOutline.length > 0) {
         console.log('✅ AI大纲生成成功，节点数量:', aiOutline.length);
-        console.log('✅ AI大纲详情:', aiOutline);
         finalOutline = aiOutline.map((node, index) => ({
           id: String(index + 1),
           title: node.title || `章节 ${index + 1}`,
@@ -469,11 +378,6 @@ export const useAppState = () => {
         }));
       } else {
         console.log('⚠️ AI大纲生成失败，使用备用大纲');
-        console.log('⚠️ 失败原因分析:', {
-          结果为空: !aiOutline,
-          不是数组: !Array.isArray(aiOutline),
-          数组长度为0: Array.isArray(aiOutline) && aiOutline.length === 0
-        });
         finalOutline = [
           {
             id: '1',
@@ -507,41 +411,22 @@ export const useAppState = () => {
       }
 
       console.log('📋 最终大纲节点数量:', finalOutline.length);
+      
+      // 更新文章状态
       setAppState(prev => ({
         ...prev,
-        currentArticle: {
-          title: '新文章',
-          draft,
-          outline: finalOutline,
-          content: '',
-          images: []
-        }
+        currentArticle: prev.currentArticle ? {
+          ...prev.currentArticle,
+          outline: finalOutline
+        } : undefined
       }));
 
       toast.success('文章大纲已生成！');
+      return finalOutline;
     } catch (error) {
-      console.error('❌ 创作启动失败，详细错误信息:', error);
-      console.error('❌ 错误类型:', typeof error);
-      console.error('❌ 错误堆栈:', error instanceof Error ? error.stack : 'No stack trace');
-      toast.error(`创作启动失败: ${error instanceof Error ? error.message : '未知错误'}`);
-      
-      // 即使出错也提供基础大纲
-      const fallbackOutline: OutlineNode[] = [
-        { id: '1', title: '引言', summary: '文章开头部分', level: 1, order: 0 },
-        { id: '2', title: '主体内容', summary: '文章核心内容', level: 1, order: 1 },
-        { id: '3', title: '总结', summary: '文章总结部分', level: 1, order: 2 }
-      ];
-      
-      setAppState(prev => ({
-        ...prev,
-        currentArticle: {
-          title: '新文章',
-          draft,
-          outline: fallbackOutline,
-          content: '',
-          images: []
-        }
-      }));
+      console.error('❌ 大纲生成失败:', error);
+      toast.error(`大纲生成失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      throw error;
     } finally {
       setIsProcessing(false);
     }
@@ -932,6 +817,7 @@ ${appState.currentArticle.outline.map(node => {
     updateStyleElement,
     recommendStylePrototypesFromDraft,
     generateOutlineWithSelectedStyle,
+    generateOutlineFromDraft,
     createTestCaseData,
     startNewArticle,
     generateArticle,
