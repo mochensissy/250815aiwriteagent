@@ -277,9 +277,10 @@ export const useAppState = () => {
   };
   
   // 推荐风格原型 (兼容旧接口)
-  const recommendStylePrototypesFromDraft = async (draft: string): Promise<void> => {
+  const recommendStylePrototypesFromDraft = async (draft: string): Promise<StylePrototype[]> => {
     const prototypes = await getStylePrototypesFromDraft(draft);
     setStylePrototypes(prototypes);
+    return prototypes;
   };
 
   // 用户确认风格后生成大纲
@@ -313,6 +314,18 @@ export const useAppState = () => {
         styleContext = allStyleElements.join('; ');
         console.log('🎨 使用通用风格上下文:', styleContext);
       }
+      
+      // 保存选择的风格信息到文章状态中，用于后续文章生成
+      setAppState(prev => ({
+        ...prev,
+        currentArticle: prev.currentArticle ? {
+          ...prev.currentArticle,
+          selectedStyleContext: styleContext,
+          selectedPrototypes: selectedPrototypes
+        } : undefined
+      }));
+      
+      console.log('💾 已保存风格上下文到文章状态，用于文章生成');
       
       // 使用新的大纲生成函数
       await generateOutlineFromDraft(appState.currentArticle.draft, styleContext || '通用写作风格');
@@ -474,16 +487,25 @@ ${appState.currentArticle.content}
       console.log('📋 大纲节点数量:', appState.currentArticle.outline.length);
       console.log('📝 草稿长度:', appState.currentArticle.draft.length);
       
-      // 获取风格上下文（从所有记忆库文章的风格要素中）
-      const allStyleElements = appState.knowledgeBase
-        .filter(a => a.category === 'memory')
-        .flatMap(a => a.styleElements || [])
-        .filter(e => e.confirmed) // 只使用已确认的风格要素
-        .map(e => e.description);
+      // 优先使用用户选择的风格上下文，确保风格一致性
+      let styleContext = appState.currentArticle.selectedStyleContext;
       
-      const styleContext = allStyleElements.join('; ');
-      console.log('🎨 风格上下文:', styleContext || '无风格上下文');
-      console.log('📊 可用风格要素数量:', allStyleElements.length);
+      if (styleContext) {
+        console.log('🎯 使用用户选择的风格上下文:', styleContext);
+        console.log('📖 选择的风格原型数量:', appState.currentArticle.selectedPrototypes?.length || 0);
+      } else {
+        // 如果没有选择的风格，回退到所有记忆库文章的风格要素
+        console.log('⚠️ 没有选择特定风格，使用所有确认的风格要素');
+        const allStyleElements = appState.knowledgeBase
+          .filter(a => a.category === 'memory')
+          .flatMap(a => a.styleElements || [])
+          .filter(e => e.confirmed) // 只使用已确认的风格要素
+          .map(e => e.description);
+        
+        styleContext = allStyleElements.join('; ');
+        console.log('🎨 通用风格上下文:', styleContext || '无风格上下文');
+        console.log('📊 可用风格要素数量:', allStyleElements.length);
+      }
       
       let fullContent: string;
       try {

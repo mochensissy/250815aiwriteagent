@@ -330,7 +330,7 @@ const DraftInput: React.FC<DraftInputProps> = ({
             {isProcessing ? (
               <>
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                处理中...
+                正在分析内容和匹配文章...
               </>
             ) : (
               <>

@@ -73,20 +73,32 @@ function App() {
   const handleDraftSubmit = async (draft: string, platform: string) => {
     console.log('提交草稿:', draft.substring(0, 100) + '...', '平台:', platform);
     
-    // 保存草稿内容
-    setCurrentDraft(draft);
-    
-    // 推荐风格原型
-    await recommendStylePrototypesFromDraft(draft);
-    
-    // 创建基础文章状态（不包含大纲）
-    await startNewArticle(draft, platform);
-    
-    // 如果有推荐的风格原型，跳转到选择页面
-    // 否则直接跳转到大纲页面
-    if (stylePrototypes.length > 0) {
-      setCurrentView('selection');
-    } else {
+    try {
+      // 保存草稿内容
+      setCurrentDraft(draft);
+      
+      // 创建基础文章状态（不包含大纲）
+      await startNewArticle(draft, platform);
+      
+      // 推荐风格原型并直接获取结果
+      console.log('🔍 开始推荐风格原型...');
+      const recommendedPrototypes = await recommendStylePrototypesFromDraft(draft);
+      
+      console.log('📊 推荐结果数量:', recommendedPrototypes.length);
+      
+      // 根据推荐结果决定跳转页面
+      if (recommendedPrototypes.length > 0) {
+        console.log('✅ 有推荐文章，跳转到选择页面');
+        setCurrentView('selection');
+      } else {
+        console.log('⚠️ 没有推荐文章，生成通用大纲并跳转到大纲页面');
+        // 没有推荐文章时，直接生成通用大纲
+        await generateOutlineFromDraft(draft, '通用写作风格');
+        setCurrentView('outline');
+      }
+    } catch (error) {
+      console.error('❌ 草稿处理失败:', error);
+      // 即使出错也提供基础流程
       setCurrentView('outline');
     }
   };
