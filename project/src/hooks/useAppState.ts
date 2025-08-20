@@ -218,6 +218,7 @@ export const useAppState = () => {
   const getStylePrototypesFromDraft = async (draft: string): Promise<StylePrototype[]> => {
     try {
       console.log('🎨 开始推荐风格原型...');
+      console.log('📝 草稿内容预览:', draft.substring(0, 100) + '...');
       console.log('📊 当前知识库文章总数:', appState.knowledgeBase.length);
       
       const caseArticles = appState.knowledgeBase.filter(a => a.category === 'case');
@@ -225,6 +226,18 @@ export const useAppState = () => {
       
       console.log('📁 案例库文章数:', caseArticles.length);
       console.log('🧠 记忆库文章数:', memoryArticles.length);
+      
+      // 详细显示文章信息
+      console.log('📁 案例库文章详情:', caseArticles.map(a => ({
+        title: a.title,
+        hasStyleElements: !!a.styleElements?.length,
+        styleElementsCount: a.styleElements?.length || 0
+      })));
+      console.log('🧠 记忆库文章详情:', memoryArticles.map(a => ({
+        title: a.title,
+        hasStyleElements: !!a.styleElements?.length,
+        styleElementsCount: a.styleElements?.length || 0
+      })));
       
       // 如果案例库为空，使用记忆库文章作为推荐源
       const referenceArticles = caseArticles.length > 0 ? caseArticles : memoryArticles;
@@ -236,8 +249,19 @@ export const useAppState = () => {
       
       console.log('🔍 使用', referenceArticles.length, '篇', caseArticles.length > 0 ? '案例库' : '记忆库', '文章进行推荐');
       
+      // 检查参考文章是否有风格要素
+      const articlesWithStyle = referenceArticles.filter(a => a.styleElements && a.styleElements.length > 0);
+      console.log('🎨 有风格要素的参考文章:', articlesWithStyle.length);
+      
+      if (articlesWithStyle.length === 0) {
+        console.log('⚠️ 参考文章都没有风格要素，无法进行智能推荐');
+        return [];
+      }
+      
+      console.log('🚀 调用recommendStylePrototypes API...');
       const prototypes = await recommendStylePrototypes(draft, referenceArticles);
       console.log('✅ 风格原型推荐完成:', prototypes.length);
+      console.log('📊 推荐结果详情:', prototypes);
       
       if (prototypes.length > 0) {
         prototypes.forEach((p, i) => {
@@ -421,13 +445,21 @@ export const useAppState = () => {
       
       // 调用AI生成大纲
       console.log('🤖 调用AI生成个性化大纲...');
+      console.log('📝 传入草稿内容（前200字符）:', draft.substring(0, 200) + '...');
+      console.log('🎨 传入风格上下文:', styleContext || '通用写作风格');
+      
       const { generateOutline } = await import('../utils/api');
       const aiOutline = await generateOutline(draft, styleContext || '通用写作风格');
+      
+      console.log('🔍 AI返回的原始结果:', aiOutline);
+      console.log('🔍 AI结果类型:', typeof aiOutline);
+      console.log('🔍 AI结果是否为数组:', Array.isArray(aiOutline));
       
       // 如果AI生成失败，使用备用大纲
       let finalOutline: OutlineNode[];
       if (aiOutline && Array.isArray(aiOutline) && aiOutline.length > 0) {
         console.log('✅ AI大纲生成成功，节点数量:', aiOutline.length);
+        console.log('✅ AI大纲详情:', aiOutline);
         finalOutline = aiOutline.map((node, index) => ({
           id: String(index + 1),
           title: node.title || `章节 ${index + 1}`,
@@ -437,6 +469,11 @@ export const useAppState = () => {
         }));
       } else {
         console.log('⚠️ AI大纲生成失败，使用备用大纲');
+        console.log('⚠️ 失败原因分析:', {
+          结果为空: !aiOutline,
+          不是数组: !Array.isArray(aiOutline),
+          数组长度为0: Array.isArray(aiOutline) && aiOutline.length === 0
+        });
         finalOutline = [
           {
             id: '1',
