@@ -41,9 +41,23 @@ export const useAppState = () => {
 
   // 初始化数据
   useEffect(() => {
+    console.log('🚀 初始化应用状态...');
     const knowledgeBase = getKnowledgeBase();
     const currentArticle = getCurrentArticle();
     const apiConfig = getAPIConfig();
+    
+    console.log('📖 从localStorage加载的数据:', {
+      知识库文章数: knowledgeBase.length,
+      知识库详情: knowledgeBase.map(a => ({
+        id: a.id,
+        title: a.title,
+        category: a.category,
+        风格要素数量: a.styleElements?.length || 0,
+        已确认要素: a.styleElements?.filter(e => e.confirmed).length || 0
+      })),
+      当前文章: currentArticle ? '有' : '无',
+      API配置: apiConfig ? '已配置' : '未配置'
+    });
     
     setAppState(prev => ({
       ...prev,
@@ -820,12 +834,8 @@ ${appState.currentArticle.outline.map(node => {
     
     // 立即保存更新后的知识库，确保状态持久化
     console.log('💾 立即保存风格要素状态到localStorage...');
-    // 需要使用更新后的状态，而不是旧的appState.knowledgeBase
-    setTimeout(() => {
-      // 重新获取最新的状态进行保存
-      const currentState = JSON.parse(localStorage.getItem('knowledgeBase') || '[]');
-      console.log('✅ 风格要素状态已保存，当前状态:', currentState.length, '篇文章');
-    }, 200);
+    // 立即保存更新后的状态
+    console.log('✅ 风格要素状态已保存');
   };
 
   // 更新API配置
@@ -848,7 +858,27 @@ ${appState.currentArticle.outline.map(node => {
   // 监听知识库变化，自动保存
   useEffect(() => {
     console.log('📚 知识库状态变化，自动保存...');
+    console.log('📊 当前知识库状态:', {
+      文章数量: appState.knowledgeBase.length,
+      文章详情: appState.knowledgeBase.map(a => ({
+        id: a.id,
+        title: a.title,
+        category: a.category,
+        风格要素数量: a.styleElements?.length || 0,
+        已确认要素: a.styleElements?.filter(e => e.confirmed).length || 0
+      }))
+    });
     saveKnowledgeBase(appState.knowledgeBase);
+    
+    // 验证保存是否成功
+    setTimeout(() => {
+      const saved = getKnowledgeBase();
+      console.log('✅ 保存验证 - localStorage中的数据:', {
+        文章数量: saved.length,
+        总风格要素: saved.reduce((sum, a) => sum + (a.styleElements?.length || 0), 0),
+        已确认要素: saved.reduce((sum, a) => sum + (a.styleElements?.filter(e => e.confirmed).length || 0), 0)
+      });
+    }, 100);
   }, [appState.knowledgeBase]);
 
   return {
