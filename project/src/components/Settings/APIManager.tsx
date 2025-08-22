@@ -45,12 +45,12 @@ const APIManager: React.FC<APIManagerProps> = ({ isOpen, onClose, apiConfig, onC
       model: 'gemini-2.0-flash'
     },
     perplexity: {
-      apiKey: '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',
-      endpoint: 'https://api.perplexity.ai/v1/query'
+      apiKey: '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',
+      endpoint: 'https://api.perplexity.ai/chat/completions'
     },
     doubao: {
       apiKey: 'ca9d6a48-f76d-4c29-a621-2cf259a55b2f',
-      endpoint: 'https://ark.cn-beijing.volces.com/api/v3/images/generations',
+      endpoint: '/api/doubao',
       model: 'doubao-seedream-3-0-t2i-250415'
     }
   };
@@ -145,8 +145,19 @@ const APIManager: React.FC<APIManagerProps> = ({ isOpen, onClose, apiConfig, onC
           'Authorization': `Bearer ${perplexityConfig.apiKey}`
         },
         body: JSON.stringify({
-          query: '测试连接',
-          model: 'llama-3.1-sonar-large-128k-online'
+          model: 'sonar-medium-online',
+          messages: [
+            {
+              role: 'system',
+              content: 'Be precise and concise.'
+            },
+            {
+              role: 'user',
+              content: '测试连接，请回复"连接成功"'
+            }
+          ],
+          max_tokens: 100,
+          temperature: 0.5
         })
       });
 
@@ -366,7 +377,7 @@ const APIManager: React.FC<APIManagerProps> = ({ isOpen, onClose, apiConfig, onC
                     perplexity: { ...prev.perplexity, endpoint: e.target.value }
                   }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                  placeholder="https://api.perplexity.ai/v1/query"
+                  placeholder="https://api.perplexity.ai/chat/completions"
                 />
               </div>
             </div>
@@ -447,7 +458,7 @@ const APIManager: React.FC<APIManagerProps> = ({ isOpen, onClose, apiConfig, onC
                   doubao: { ...prev.doubao, endpoint: e.target.value }
                 }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                placeholder="https://ark.cn-beijing.volces.com/api/v3/images/generations"
+                placeholder="/api/doubao (通过代理解决CORS问题)"
               />
             </div>
           </div>

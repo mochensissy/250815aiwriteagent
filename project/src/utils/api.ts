@@ -64,10 +64,14 @@ export const callGeminiAPI = async (prompt: string): Promise<string> => {
 
 /**
  * 调用Perplexity API进行外部搜索
+ * 根据官方文档更新API调用格式
  */
 export const callPerplexityAPI = async (query: string): Promise<string> => {
   try {
     const config = getAPIConfig();
+    console.log('🔍 调用Perplexity API');
+    console.log('📝 查询内容:', query);
+    
     const response = await fetch(config.perplexity.endpoint, {
       method: 'POST',
       headers: {
@@ -75,30 +79,60 @@ export const callPerplexityAPI = async (query: string): Promise<string> => {
         'Authorization': `Bearer ${config.perplexity.apiKey}`,
       },
       body: JSON.stringify({
-        query: query,
-        model: 'llama-3.1-sonar-large-128k-online'
+        model: 'sonar-medium-online',
+        messages: [
+          {
+            role: 'system',
+            content: 'Be precise and concise. Provide detailed explanations and cite sources.'
+          },
+          {
+            role: 'user',
+            content: query
+          }
+        ],
+        max_tokens: 800,
+        temperature: 0.5
       })
     });
 
+    console.log('✅ Perplexity API响应状态:', response.status);
+
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Perplexity API错误详情:', errorText);
       throw new Error(`Perplexity API错误: ${response.status}`);
     }
 
     const data = await response.json();
-    // 根据Perplexity API的实际响应格式调整
-    return data.answer || data.result || data.response || JSON.stringify(data);
+    console.log('📦 Perplexity API响应数据结构:', {
+      choices: data.choices?.length || 0,
+      hasMessage: !!data.choices?.[0]?.message,
+      hasContent: !!data.choices?.[0]?.message?.content
+    });
+    
+    const result = data.choices?.[0]?.message?.content || '';
+    console.log('📄 搜索结果长度:', result.length);
+    console.log('📄 搜索结果预览:', result.substring(0, 200) + '...');
+    
+    return result;
   } catch (error) {
-    console.error('Perplexity API调用失败:', error);
+    console.error('❌ Perplexity API调用失败:', error);
     throw error;
   }
 };
 
 /**
  * 调用豆包生图API生成图片
+ * 根据火山引擎文档更新API调用格式
  */
 export const generateImage = async (prompt: string, size = '1024x1024'): Promise<string> => {
   try {
     const config = getAPIConfig();
+    console.log('🎨 调用豆包生图API');
+    console.log('📝 图片描述:', prompt);
+    console.log('📏 图片尺寸:', size);
+    
+    // 根据火山引擎文档的调用格式
     const response = await fetch(config.doubao.endpoint, {
       method: 'POST',
       headers: {
@@ -108,21 +142,37 @@ export const generateImage = async (prompt: string, size = '1024x1024'): Promise
       body: JSON.stringify({
         model: config.doubao.model,
         prompt: prompt,
-        response_format: 'url',
+        n: 1,
         size: size,
-        guidance_scale: 3,
-        watermark: true
+        response_format: 'url'
       })
     });
 
+    console.log('✅ 豆包API响应状态:', response.status);
+
     if (!response.ok) {
-      throw new Error(`豆包生图API错误: ${response.status}`);
+      const errorText = await response.text();
+      console.error('❌ 豆包API错误详情:', errorText);
+      throw new Error(`豆包生图API错误: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    return data.data[0]?.url || '';
+    console.log('📦 豆包API响应数据结构:', {
+      hasData: !!data.data,
+      dataLength: data.data?.length || 0,
+      hasUrl: !!data.data?.[0]?.url
+    });
+    
+    if (data.data && data.data.length > 0 && data.data[0].url) {
+      const imageUrl = data.data[0].url;
+      console.log('🖼️ 生成的图片URL:', imageUrl);
+      return imageUrl;
+    } else {
+      console.error('❌ 豆包API返回数据格式异常:', data);
+      throw new Error('豆包API返回的图片数据格式异常');
+    }
   } catch (error) {
-    console.error('豆包生图API调用失败:', error);
+    console.error('❌ 豆包生图API调用失败:', error);
     throw error;
   }
 };

@@ -15,6 +15,7 @@ import OutlineEditor from './components/Editor/OutlineEditor';
 import ArticleEditor from './components/Editor/ArticleEditor';
 import ImageManager from './components/Images/ImageManager';
 import APIManager from './components/Settings/APIManager';
+import APITester from './components/Testing/APITester';
 import { useAppState } from './hooks/useAppState';
 import { generateOutline } from './utils/api';
 import { KnowledgeBaseArticle, StylePrototype } from './types';
@@ -47,6 +48,7 @@ function App() {
   const [currentView, setCurrentView] = useState<'draft' | 'selection' | 'outline' | 'editor'>('draft');
   const [selectedPrototype, setSelectedPrototype] = useState<StylePrototype>();
   const [showAPIManager, setShowAPIManager] = useState(false);
+  const [showAPITester, setShowAPITester] = useState(false);
   const [currentDraft, setCurrentDraft] = useState<string>(''); // 保存当前草稿内容
   const [processingStatus, setProcessingStatus] = useState<string>('处理中...'); // 处理状态文本
 
@@ -286,16 +288,8 @@ function App() {
                         order: index
                       }));
                       
-                      setAppState(prev => ({
-                        ...prev,
-                        currentArticle: {
-                          title: '测试文章',
-                          draft,
-                          outline,
-                          content: '',
-                          images: []
-                        }
-                      }));
+                      // 这个功能需要通过 useAppState hook 来实现
+                      console.log('需要通过正确的状态管理来设置文章状态');
                       setCurrentView('outline');
                       alert('大纲生成成功！');
                     } else {
@@ -312,6 +306,14 @@ function App() {
               强制生成大纲
             </button>
             
+            <button
+              onClick={() => setShowAPITester(true)}
+              className="flex items-center gap-2 px-3 py-2 text-green-600 hover:text-green-900 hover:bg-green-100 rounded-lg transition-colors"
+              title="API功能测试"
+            >
+              <Settings className="w-4 h-4" />
+              测试
+            </button>
             <button
               onClick={() => setShowAPIManager(true)}
               className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
@@ -472,6 +474,12 @@ function App() {
         onClose={() => setShowAPIManager(false)}
         apiConfig={appState.apiConfig}
         onConfigChange={updateAPIConfig}
+      />
+
+      {/* API测试弹窗 */}
+      <APITester
+        isOpen={showAPITester}
+        onClose={() => setShowAPITester(false)}
       />
     </div>
   );

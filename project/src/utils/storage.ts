@@ -400,7 +400,7 @@ export const getAPIConfig = (): APIConfig => {
     },
     doubao: {
       apiKey: parsed.doubao?.apiKey || '',
-      endpoint: parsed.doubao?.endpoint || 'https://ark.cn-beijing.volces.com/api/v3/images/generations',
+      endpoint: parsed.doubao?.endpoint || '/api/doubao',
       model: parsed.doubao?.model || 'doubao-seedream-3-0-t2i-250415'
     }
   };
@@ -434,7 +434,7 @@ export const getDefaultAPIConfig = (): APIConfig => {
     },
     doubao: {
       apiKey: 'ca9d6a48-f76d-4c29-a621-2cf259a55b2f',
-      endpoint: 'https://ark.cn-beijing.volces.com/api/v3/images/generations',
+      endpoint: '/api/doubao',
       model: 'doubao-seedream-3-0-t2i-250415'
     }
   };
