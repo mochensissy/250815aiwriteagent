@@ -17,6 +17,33 @@ export default defineConfig({
         headers: {
           'Origin': 'https://ark.cn-beijing.volces.com'
         }
+      },
+      // 代理Perplexity API请求以解决网络连接问题
+      '/api/perplexity': {
+        target: 'https://api.perplexity.ai',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/perplexity/, '/chat/completions'),
+        headers: {
+          'Origin': 'https://api.perplexity.ai'
+        }
+      },
+      // 代理Gemini API请求以解决网络连接问题
+      '/api/gemini': {
+        target: 'https://generativelanguage.googleapis.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/gemini/, '/v1beta/models/gemini-2.0-flash:generateContent'),
+        headers: {
+          'Origin': 'https://generativelanguage.googleapis.com'
+        }
+      },
+      // 代理OpenRouter API请求
+      '/api/openrouter': {
+        target: 'https://openrouter.ai',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/openrouter/, '/api/v1/chat/completions'),
+        headers: {
+          'Origin': 'https://openrouter.ai'
+        }
       }
     }
   }

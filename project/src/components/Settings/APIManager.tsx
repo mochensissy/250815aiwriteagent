@@ -1,10 +1,11 @@
 /**
  * API管理组件
  * 
- * 允许用户配置和测试三个主要API：
+ * 允许用户配置和测试四个主要API：
  * 1. Google Gemini API - 大模型文本生成
  * 2. Perplexity API - 外部搜索
  * 3. 豆包生图API - 图片生成
+ * 4. OpenRouter API - 通过OpenRouter调用Gemini 2.5 Flash Lite
  */
 
 import React, { useState, useEffect } from 'react';
@@ -24,34 +25,42 @@ const APIManager: React.FC<APIManagerProps> = ({ isOpen, onClose, apiConfig, onC
   const [showKeys, setShowKeys] = useState({
     gemini: false,
     perplexity: false,
-    doubao: false
+    doubao: false,
+    openrouter: false
   });
   const [testResults, setTestResults] = useState<{[key: string]: APITestResult | null}>({
     gemini: null,
     perplexity: null,
-    doubao: null
+    doubao: null,
+    openrouter: null
   });
   const [testing, setTesting] = useState<{[key: string]: boolean}>({
     gemini: false,
     perplexity: false,
-    doubao: false
+    doubao: false,
+    openrouter: false
   });
 
   // 默认配置
   const defaultConfig: APIConfig = {
     gemini: {
       apiKey: 'AIzaSyAH-wepOrQu0ujJfeqbcz2Pn7wHHvLihxg',
-      endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
+      endpoint: '/api/gemini',
       model: 'gemini-2.0-flash'
     },
     perplexity: {
-      apiKey: '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',
-      endpoint: 'https://api.perplexity.ai/chat/completions'
+      apiKey: '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',
+      endpoint: '/api/perplexity'
     },
     doubao: {
       apiKey: 'ca9d6a48-f76d-4c29-a621-2cf259a55b2f',
       endpoint: '/api/doubao',
       model: 'doubao-seedream-3-0-t2i-250415'
+    },
+    openrouter: {
+      apiKey: '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',
+      endpoint: '/api/openrouter',
+      model: 'google/gemini-2.5-flash-lite'
     }
   };
 
@@ -60,7 +69,7 @@ const APIManager: React.FC<APIManagerProps> = ({ isOpen, onClose, apiConfig, onC
   }, [apiConfig]);
 
   // 测试API连接
-  const testAPI = async (apiType: 'gemini' | 'perplexity' | 'doubao') => {
+  const testAPI = async (apiType: 'gemini' | 'perplexity' | 'doubao' | 'openrouter') => {
     setTesting(prev => ({ ...prev, [apiType]: true }));
     const startTime = Date.now();
 
@@ -80,6 +89,10 @@ const APIManager: React.FC<APIManagerProps> = ({ isOpen, onClose, apiConfig, onC
         case 'doubao':
           success = await testDoubaoAPI(config.doubao);
           message = success ? '豆包生图API连接成功' : '豆包生图API连接失败';
+          break;
+        case 'openrouter':
+          success = await testOpenRouterAPI(config.openrouter);
+          message = success ? 'OpenRouter API连接成功' : 'OpenRouter API连接失败';
           break;
       }
 
@@ -194,13 +207,50 @@ const APIManager: React.FC<APIManagerProps> = ({ isOpen, onClose, apiConfig, onC
     }
   };
 
+  // 测试OpenRouter API
+  const testOpenRouterAPI = async (openrouterConfig: APIConfig['openrouter']): Promise<boolean> => {
+    try {
+      const response = await fetch(openrouterConfig.endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openrouterConfig.apiKey}`,
+          'HTTP-Referer': 'https://ai-writer.local',
+          'X-Title': 'AI Writer Assistant'
+        },
+        body: JSON.stringify({
+          model: openrouterConfig.model,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: 'Test connection, please reply "Connection successful"'
+                }
+              ]
+            }
+          ],
+          max_tokens: 100,
+          temperature: 0.5
+        })
+      });
+
+      return response.ok;
+    } catch (error) {
+      console.error('OpenRouter API测试失败:', error);
+      return false;
+    }
+  };
+
   // 重置为默认配置
   const resetToDefault = () => {
     setConfig(defaultConfig);
     setTestResults({
       gemini: null,
       perplexity: null,
-      doubao: null
+      doubao: null,
+      openrouter: null
     });
     toast.success('已重置为默认配置');
   };
@@ -213,7 +263,7 @@ const APIManager: React.FC<APIManagerProps> = ({ isOpen, onClose, apiConfig, onC
   };
 
   // 切换密钥显示
-  const toggleShowKey = (apiType: 'gemini' | 'perplexity' | 'doubao') => {
+  const toggleShowKey = (apiType: 'gemini' | 'perplexity' | 'doubao' | 'openrouter') => {
     setShowKeys(prev => ({ ...prev, [apiType]: !prev[apiType] }));
   };
 
@@ -312,7 +362,7 @@ const APIManager: React.FC<APIManagerProps> = ({ isOpen, onClose, apiConfig, onC
                   gemini: { ...prev.gemini, endpoint: e.target.value }
                 }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                placeholder="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+                placeholder="/api/gemini (通过代理解决网络问题)"
               />
             </div>
           </div>
@@ -377,7 +427,7 @@ const APIManager: React.FC<APIManagerProps> = ({ isOpen, onClose, apiConfig, onC
                     perplexity: { ...prev.perplexity, endpoint: e.target.value }
                   }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                  placeholder="https://api.perplexity.ai/chat/completions"
+                  placeholder="/api/perplexity (通过代理解决网络问题)"
                 />
               </div>
             </div>
@@ -459,6 +509,86 @@ const APIManager: React.FC<APIManagerProps> = ({ isOpen, onClose, apiConfig, onC
                 }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
                 placeholder="/api/doubao (通过代理解决CORS问题)"
+              />
+            </div>
+          </div>
+
+          {/* OpenRouter API */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium text-gray-900">OpenRouter API</h3>
+              <div className="flex items-center gap-2">
+                {testResults.openrouter && (
+                  <div className={`flex items-center gap-1 text-sm ${
+                    testResults.openrouter.success ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {testResults.openrouter.success ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+                    {testResults.openrouter.message}
+                    {testResults.openrouter.responseTime && (
+                      <span className="text-gray-500">({testResults.openrouter.responseTime}ms)</span>
+                    )}
+                  </div>
+                )}
+                <button
+                  onClick={() => testAPI('openrouter')}
+                  disabled={testing.openrouter}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-300 text-white text-sm rounded-lg transition-colors"
+                >
+                  {testing.openrouter ? <Loader className="w-4 h-4 animate-spin" /> : <TestTube className="w-4 h-4" />}
+                  测试连接
+                </button>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">API密钥</label>
+                <div className="relative">
+                  <input
+                    type={showKeys.openrouter ? 'text' : 'password'}
+                    value={config.openrouter.apiKey}
+                    onChange={(e) => setConfig(prev => ({
+                      ...prev,
+                      openrouter: { ...prev.openrouter, apiKey: e.target.value }
+                    }))}
+                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                    placeholder="输入OpenRouter API密钥"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => toggleShowKey('openrouter')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showKeys.openrouter ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">模型</label>
+                <input
+                  type="text"
+                  value={config.openrouter.model}
+                  onChange={(e) => setConfig(prev => ({
+                    ...prev,
+                    openrouter: { ...prev.openrouter, model: e.target.value }
+                  }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                  placeholder="google/gemini-2.5-flash-lite"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">API端点</label>
+              <input
+                type="text"
+                value={config.openrouter.endpoint}
+                onChange={(e) => setConfig(prev => ({
+                  ...prev,
+                  openrouter: { ...prev.openrouter, endpoint: e.target.value }
+                }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                placeholder="/api/openrouter (通过代理访问OpenRouter)"
               />
             </div>
           </div>

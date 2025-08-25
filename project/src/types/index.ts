@@ -95,6 +95,11 @@ export interface APIConfig {
     endpoint: string;
     model: string;
   };
+  openrouter: {
+    apiKey: string;
+    endpoint: string;
+    model: string;
+  };
 }
 
 export interface APITestResult {

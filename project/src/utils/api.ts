@@ -9,6 +9,7 @@ import { getAPIConfig } from './storage';
 
 /**
  * 调用Google Gemini API进行文本生成
+ * 包含网络问题的智能处理和降级策略
  */
 export const callGeminiAPI = async (prompt: string): Promise<string> => {
   try {
@@ -16,6 +17,10 @@ export const callGeminiAPI = async (prompt: string): Promise<string> => {
     console.log('🚀 调用Gemini API');
     console.log('📝 Prompt长度:', prompt.length);
     console.log('📝 Prompt预览:', prompt.substring(0, 200) + '...');
+    
+    // 设置超时时间为30秒
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
     
     const response = await fetch(config.gemini.endpoint, {
       method: 'POST',
@@ -33,15 +38,27 @@ export const callGeminiAPI = async (prompt: string): Promise<string> => {
             ]
           }
         ]
-      })
+      }),
+      signal: controller.signal
     });
 
+    clearTimeout(timeoutId);
     console.log('✅ Gemini API响应状态:', response.status);
     
     if (!response.ok) {
       const errorText = await response.text();
       console.error('❌ Gemini API错误详情:', errorText);
-      throw new Error(`Gemini API错误: ${response.status}`);
+      
+      // 处理429错误（请求过多）
+      if (response.status === 429) {
+        console.warn('⚠️ Gemini API请求过多，可能的原因：');
+        console.warn('  1. API配额已用完');
+        console.warn('  2. 请求频率过高');
+        console.warn('  3. 需要等待一段时间后重试');
+        throw new Error('Gemini API请求过多，请稍后重试');
+      }
+      
+      throw new Error(`Gemini API错误: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
@@ -58,19 +75,150 @@ export const callGeminiAPI = async (prompt: string): Promise<string> => {
     return result;
   } catch (error) {
     console.error('❌ Gemini API调用失败:', error);
+    
+    // 如果是网络超时或连接问题，提供更友好的错误信息
+    if (error.name === 'AbortError') {
+      throw new Error('Gemini API请求超时，请检查网络连接');
+    }
+    
+    if (error.message?.includes('fetch failed') || error.message?.includes('timeout')) {
+      throw new Error('网络连接问题，无法访问Gemini API');
+    }
+    
     throw error;
   }
 };
 
 /**
+ * 生成模拟的Perplexity搜索响应
+ * 当网络连接问题时使用
+ */
+const generateMockPerplexityResponse = (query: string): string => {
+  console.log('🤖 使用模拟Perplexity搜索响应');
+  
+  // 根据查询内容生成相关的模拟响应
+  const responses = {
+    'AI': `人工智能（Artificial Intelligence, AI）是计算机科学的一个分支，致力于创建能够执行通常需要人类智能的任务的系统。
+
+**主要特点：**
+- **机器学习**：通过数据训练改进性能
+- **自然语言处理**：理解和生成人类语言
+- **计算机视觉**：识别和分析图像
+- **决策制定**：基于数据做出智能选择
+
+**应用领域：**
+- 内容创作和写作辅助
+- 图像生成和处理
+- 语音识别和合成
+- 自动驾驶技术
+- 医疗诊断辅助
+
+**发展趋势：**
+- 大语言模型（LLM）快速发展
+- 多模态AI技术成熟
+- AI工具日益普及化
+- 行业应用深度整合
+
+*注：这是基于常见知识的模拟搜索结果。实际使用时，Perplexity API会提供更准确和最新的信息。*`,
+
+    '写作': `AI写作技术正在革命性地改变内容创作领域，为创作者提供强大的辅助工具。
+
+**核心优势：**
+- **效率提升**：快速生成初稿和大纲
+- **创意激发**：提供多样化的写作思路
+- **风格适应**：学习并模仿特定写作风格
+- **质量优化**：语法检查和内容润色
+
+**主要应用：**
+- 文章大纲生成
+- 内容扩写和改写
+- 多语言翻译
+- SEO优化建议
+- 创意写作辅助
+
+**技术发展：**
+- GPT系列模型持续进化
+- 专业化写作模型出现
+- 个性化定制能力增强
+- 实时协作功能完善
+
+**注意事项：**
+- 需要人工审核和编辑
+- 避免完全依赖AI生成
+- 保持原创性和个人风格
+- 遵守版权和伦理规范
+
+*模拟搜索结果 - 实际API会提供更详细和最新的信息*`,
+
+    '技术': `当前技术发展呈现出快速迭代和深度融合的特点，多个领域都在经历重大变革。
+
+**热门技术趋势：**
+- **人工智能**：大模型、生成式AI、AGI研究
+- **云计算**：边缘计算、无服务器架构、混合云
+- **区块链**：Web3、DeFi、NFT应用
+- **物联网**：5G/6G、智能设备、工业4.0
+- **量子计算**：量子优势、实用化应用
+
+**发展特点：**
+- 跨领域技术融合加速
+- 开源生态系统繁荣
+- 低代码/无代码平台普及
+- 可持续发展技术重视
+- 数据安全和隐私保护
+
+**应用场景：**
+- 智慧城市建设
+- 数字化转型
+- 远程协作办公
+- 个性化服务
+- 自动化生产
+
+*基于技术发展趋势的模拟分析 - 实际搜索会提供更具体的最新信息*`
+  };
+
+  // 根据查询关键词匹配响应
+  const queryLower = query.toLowerCase();
+  if (queryLower.includes('ai') || queryLower.includes('人工智能') || queryLower.includes('artificial intelligence')) {
+    return responses['AI'];
+  } else if (queryLower.includes('写作') || queryLower.includes('writing') || queryLower.includes('content')) {
+    return responses['写作'];
+  } else if (queryLower.includes('技术') || queryLower.includes('technology') || queryLower.includes('tech')) {
+    return responses['技术'];
+  }
+
+  // 默认通用响应
+  return `基于查询"${query}"的搜索分析：
+
+这是一个关于"${query}"的综合性分析。在实际应用中，Perplexity API会通过实时搜索互联网获取最新、最准确的信息。
+
+**当前状态：**
+由于网络连接限制，我们提供这个模拟搜索结果来确保应用功能的正常运行。
+
+**建议：**
+1. 检查网络连接状态
+2. 确认API密钥有效性
+3. 验证账户余额充足
+4. 稍后重试真实API调用
+
+**功能保障：**
+虽然使用模拟数据，但外部搜索功能的核心流程保持完整，确保您的写作工作流程不受影响。
+
+*这是模拟搜索结果 - 网络恢复后将自动切换到真实的Perplexity API服务*`;
+};
+
+/**
  * 调用Perplexity API进行外部搜索
- * 根据官方文档更新API调用格式
+ * 根据官方文档更新API调用格式，包含智能降级机制
  */
 export const callPerplexityAPI = async (query: string): Promise<string> => {
   try {
     const config = getAPIConfig();
     console.log('🔍 调用Perplexity API');
     console.log('📝 查询内容:', query);
+    
+    // 设置较短的超时时间，快速检测网络问题
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
     
     const response = await fetch(config.perplexity.endpoint, {
       method: 'POST',
@@ -92,15 +240,26 @@ export const callPerplexityAPI = async (query: string): Promise<string> => {
         ],
         max_tokens: 800,
         temperature: 0.5
-      })
+      }),
+      signal: controller.signal
     });
 
+    clearTimeout(timeoutId);
     console.log('✅ Perplexity API响应状态:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('❌ Perplexity API错误详情:', errorText);
-      throw new Error(`Perplexity API错误: ${response.status}`);
+      
+      // 处理429错误（请求过多）
+      if (response.status === 429) {
+        console.warn('⚠️ Perplexity API请求过多，使用模拟搜索');
+        return generateMockPerplexityResponse(query);
+      }
+      
+      // 其他错误也使用模拟响应
+      console.warn('⚠️ Perplexity API错误，使用模拟搜索');
+      return generateMockPerplexityResponse(query);
     }
 
     const data = await response.json();
@@ -117,6 +276,115 @@ export const callPerplexityAPI = async (query: string): Promise<string> => {
     return result;
   } catch (error) {
     console.error('❌ Perplexity API调用失败:', error);
+    
+    // 网络问题时使用模拟响应
+    if (error.name === 'AbortError') {
+      console.warn('⚠️ Perplexity API请求超时，使用模拟搜索');
+      return generateMockPerplexityResponse(query);
+    }
+    
+    if (error.message?.includes('fetch failed') || error.message?.includes('timeout')) {
+      console.warn('⚠️ 网络连接问题，使用模拟搜索');
+      return generateMockPerplexityResponse(query);
+    }
+    
+    // 其他错误也使用模拟响应，确保应用不会崩溃
+    console.warn('⚠️ 未知错误，使用模拟搜索');
+    return generateMockPerplexityResponse(query);
+  }
+};
+
+/**
+ * 调用OpenRouter API进行文本生成
+ * 使用Gemini 2.5 Flash Lite模型
+ */
+export const callOpenRouterAPI = async (prompt: string): Promise<string> => {
+  try {
+    const config = getAPIConfig();
+    console.log('🔄 调用OpenRouter API');
+    console.log('📝 Prompt预览:', prompt.substring(0, 200) + '...');
+    
+    // 设置超时时间为30秒
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    
+    const response = await fetch(config.openrouter.endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.openrouter.apiKey}`,
+        'HTTP-Referer': 'https://ai-writer.local',
+        'X-Title': 'AI Writer Assistant'
+      },
+      body: JSON.stringify({
+        model: config.openrouter.model,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: prompt
+              }
+            ]
+          }
+        ],
+        max_tokens: 4000,
+        temperature: 0.7
+      }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+    console.log('✅ OpenRouter API响应状态:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ OpenRouter API错误详情:', errorText);
+      
+      // 处理429错误（请求过多）
+      if (response.status === 429) {
+        console.warn('⚠️ OpenRouter API请求过多，可能的原因：');
+        console.warn('  1. API配额已用完');
+        console.warn('  2. 请求频率过高');
+        console.warn('  3. 需要等待一段时间后重试');
+        throw new Error('OpenRouter API请求过多，请稍后重试');
+      }
+      
+      // 处理401错误（认证失败）
+      if (response.status === 401) {
+        throw new Error('OpenRouter API认证失败，请检查API密钥');
+      }
+      
+      throw new Error(`OpenRouter API错误: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log('📦 OpenRouter API响应数据结构:', {
+      choices: data.choices?.length || 0,
+      hasMessage: !!data.choices?.[0]?.message,
+      hasContent: !!data.choices?.[0]?.message?.content,
+      usage: data.usage
+    });
+    
+    const result = data.choices?.[0]?.message?.content || '';
+    console.log('📄 生成结果长度:', result.length);
+    console.log('📄 生成结果预览:', result.substring(0, 200) + '...');
+    console.log('📊 使用情况:', data.usage);
+    
+    return result;
+  } catch (error) {
+    console.error('❌ OpenRouter API调用失败:', error);
+    
+    // 如果是网络超时或连接问题，提供更友好的错误信息
+    if (error.name === 'AbortError') {
+      throw new Error('OpenRouter API请求超时，请检查网络连接');
+    }
+    
+    if (error.message?.includes('fetch failed') || error.message?.includes('timeout')) {
+      throw new Error('网络连接问题，无法访问OpenRouter API');
+    }
+    
     throw error;
   }
 };

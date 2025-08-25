@@ -391,17 +391,22 @@ export const getAPIConfig = (): APIConfig => {
   return {
     gemini: {
       apiKey: parsed.gemini?.apiKey || '',
-      endpoint: parsed.gemini?.endpoint || 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
+      endpoint: parsed.gemini?.endpoint || '/api/gemini',
       model: parsed.gemini?.model || 'gemini-2.0-flash'
     },
     perplexity: {
-      apiKey: parsed.perplexity?.apiKey || '',
-      endpoint: parsed.perplexity?.endpoint || 'https://api.perplexity.ai/v1/query'
+      apiKey: parsed.perplexity?.apiKey || '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',
+      endpoint: parsed.perplexity?.endpoint || '/api/perplexity'
     },
     doubao: {
       apiKey: parsed.doubao?.apiKey || '',
       endpoint: parsed.doubao?.endpoint || '/api/doubao',
       model: parsed.doubao?.model || 'doubao-seedream-3-0-t2i-250415'
+    },
+    openrouter: {
+      apiKey: parsed.openrouter?.apiKey || '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',
+      endpoint: parsed.openrouter?.endpoint || '/api/openrouter',
+      model: parsed.openrouter?.model || 'google/gemini-2.5-flash-lite'
     }
   };
 };
@@ -425,17 +430,22 @@ export const getDefaultAPIConfig = (): APIConfig => {
   return {
     gemini: {
       apiKey: 'AIzaSyAH-wepOrQu0ujJfeqbcz2Pn7wHHvLihxg',
-      endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
+      endpoint: '/api/gemini',
       model: 'gemini-2.0-flash'
     },
     perplexity: {
-      apiKey: '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',
-      endpoint: 'https://api.perplexity.ai/v1/query'
+      apiKey: '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',
+      endpoint: '/api/perplexity'
     },
     doubao: {
       apiKey: 'ca9d6a48-f76d-4c29-a621-2cf259a55b2f',
       endpoint: '/api/doubao',
       model: 'doubao-seedream-3-0-t2i-250415'
+    },
+    openrouter: {
+      apiKey: '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',
+      endpoint: '/api/openrouter',
+      model: 'google/gemini-2.5-flash-lite'
     }
   };
 };
