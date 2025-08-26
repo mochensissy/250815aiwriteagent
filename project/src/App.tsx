@@ -39,6 +39,8 @@ function App() {
     performExternalSearch,
     generateImages,
     generateCover,
+    regenerateImage,
+    deleteImage,
     updateOutline,
     updateContent,
     exportArticle,
@@ -150,47 +152,9 @@ function App() {
     setCurrentView('editor');
   };
 
-  // 重新生成图片
-  const handleRegenerateImage = async (imageId: string) => {
-    if (!appState.currentArticle) return;
-    
-    const image = appState.currentArticle.images.find(img => img.id === imageId) ||
-                  appState.currentArticle.coverImage;
-    
-    if (image) {
-      try {
-        const newImageUrl = await generateImage(image.prompt);
-        
-        if (image.id.startsWith('cover_')) {
-          // 更新封面
-          const newCoverImage = { ...image, url: newImageUrl, id: `cover_${Date.now()}` };
-          updateContent(appState.currentArticle.content); // 触发状态更新
-        } else {
-          // 更新配图
-          const updatedImages = appState.currentArticle.images.map(img =>
-            img.id === imageId ? { ...img, url: newImageUrl, id: `img_${Date.now()}` } : img
-          );
-          // 更新图片数组
-        }
-      } catch (error) {
-        console.error('图片重新生成失败:', error);
-      }
-    }
-  };
-
-  // 删除图片
-  const handleDeleteImage = (imageId: string) => {
-    if (!appState.currentArticle) return;
-    
-    if (imageId.startsWith('cover_')) {
-      // 删除封面
-      updateContent(appState.currentArticle.content); // 触发状态更新
-    } else {
-      // 删除配图
-      const updatedImages = appState.currentArticle.images.filter(img => img.id !== imageId);
-      // 更新图片数组
-    }
-  };
+  // 图片管理事件处理器直接使用hook中的方法
+  const handleRegenerateImage = regenerateImage;
+  const handleDeleteImage = deleteImage;
 
   return (
     <div className="min-h-screen bg-gray-50 flex">

@@ -5,7 +5,7 @@
  * 包含详细的测试日志和错误处理
  */
 
-import { callGeminiAPI, callPerplexityAPI, generateImage, generateOutline, generateFullArticle } from './api';
+import { callOpenRouterAPI, callPerplexityAPI, generateImage, generateOutline, generateFullArticle } from './api';
 import { getAPIConfig } from './storage';
 
 /**
@@ -20,54 +20,54 @@ export interface TestResult {
 }
 
 /**
- * 测试Gemini API连接和基本功能
+ * 测试OpenRouter API连接和基本功能
  */
 export const testGeminiConnection = async (): Promise<TestResult> => {
   const startTime = Date.now();
-  console.log('🧪 开始测试Gemini API连接...');
+  console.log('🧪 开始测试OpenRouter API连接...');
   
   try {
     const config = getAPIConfig();
     
-    if (!config.gemini.apiKey) {
+    if (!config.openrouter.apiKey) {
       return {
         success: false,
-        message: 'Gemini API密钥未配置',
+        message: 'OpenRouter API密钥未配置',
         responseTime: Date.now() - startTime,
         error: 'API密钥缺失'
       };
     }
 
     // 测试简单的文本生成
-    const testPrompt = '请简单回复"Gemini API连接成功"，不要添加其他内容。';
-    const result = await callGeminiAPI(testPrompt);
+    const testPrompt = '请简单回复"OpenRouter API连接成功"，不要添加其他内容。';
+    const result = await callOpenRouterAPI(testPrompt);
     
     const responseTime = Date.now() - startTime;
     
     if (result && result.length > 0) {
-      console.log('✅ Gemini API测试成功');
+      console.log('✅ OpenRouter API测试成功');
       return {
         success: true,
-        message: 'Gemini API连接成功',
+        message: 'OpenRouter API连接成功',
         responseTime,
         data: result.substring(0, 100) + (result.length > 100 ? '...' : '')
       };
     } else {
-      console.log('❌ Gemini API返回空结果');
+      console.log('❌ OpenRouter API返回空结果');
       return {
         success: false,
-        message: 'Gemini API返回空结果',
+        message: 'OpenRouter API返回空结果',
         responseTime,
         error: '返回数据为空'
       };
     }
   } catch (error) {
     const responseTime = Date.now() - startTime;
-    console.error('❌ Gemini API测试失败:', error);
+    console.error('❌ OpenRouter API测试失败:', error);
     
     return {
       success: false,
-      message: 'Gemini API连接失败',
+      message: 'OpenRouter API连接失败',
       responseTime,
       error: error instanceof Error ? error.message : '未知错误'
     };

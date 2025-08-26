@@ -481,7 +481,7 @@ ${combinedContent}
 `;
 
   try {
-    const result = await callGeminiAPI(prompt);
+    const result = await callOpenRouterAPI(prompt);
     console.log('🎨 多维度特征分析结果:', result);
     
     try {
@@ -566,7 +566,7 @@ ${referenceArticles.map((article, index) => `${index + 1}. ID: ${article.id}
 `;
 
   try {
-    const result = await callGeminiAPI(prompt);
+    const result = await callOpenRouterAPI(prompt);
     console.log('🤖 AI推荐结果:', result);
     console.log('📄 AI返回内容长度:', result.length);
     
@@ -710,7 +710,7 @@ ${styleContext}
 `;
 
   try {
-    const result = await callGeminiAPI(prompt);
+    const result = await callOpenRouterAPI(prompt);
     console.log('🤖 AI大纲生成结果:', result);
     console.log('📄 AI返回内容长度:', result.length);
     
@@ -847,7 +847,7 @@ ${externalInsights ? `外部搜索增强信息：\n${externalInsights}\n` : ''}
 `;
 
   try {
-    return await callGeminiAPI(prompt);
+    return await callOpenRouterAPI(prompt);
   } catch (error) {
     console.error('文章生成失败:', error);
     throw error;
@@ -876,7 +876,7 @@ ${content}
 `;
 
   try {
-    return await callGeminiAPI(prompt);
+    return await callOpenRouterAPI(prompt);
   } catch (error) {
     console.error('编辑指令处理失败:', error);
     throw error;
@@ -908,7 +908,7 @@ ${content}
 `;
 
   try {
-    const result = await callGeminiAPI(prompt);
+    const result = await callOpenRouterAPI(prompt);
     try {
       return JSON.parse(result);
     } catch {

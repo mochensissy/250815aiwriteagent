@@ -24,7 +24,7 @@ import {
   callPerplexityAPI,
   generateImagePrompts,
   generateImage,
-  callGeminiAPI
+  callOpenRouterAPI
 } from '../utils/api';
 import toast from 'react-hot-toast';
 
@@ -667,6 +667,97 @@ ${appState.currentArticle.outline.map(node => {
     }
   };
 
+  // 重新生成图片
+  const regenerateImage = async (imageId: string) => {
+    if (!appState.currentArticle) return;
+
+    setIsProcessing(true);
+    
+    try {
+      const targetImage = imageId.startsWith('cover_') 
+        ? appState.currentArticle.coverImage
+        : appState.currentArticle.images.find(img => img.id === imageId);
+
+      if (!targetImage) {
+        toast.error('找不到目标图片');
+        return;
+      }
+
+      console.log('🔄 重新生成图片:', targetImage.prompt);
+      const newImageUrl = await generateImage(targetImage.prompt);
+      
+      if (imageId.startsWith('cover_')) {
+        // 更新封面
+        const newCoverImage: GeneratedImage = {
+          ...targetImage,
+          id: `cover_${Date.now()}`,
+          url: newImageUrl
+        };
+
+        setAppState(prev => ({
+          ...prev,
+          currentArticle: prev.currentArticle ? {
+            ...prev.currentArticle,
+            coverImage: newCoverImage
+          } : undefined
+        }));
+
+        toast.success('封面已重新生成！');
+      } else {
+        // 更新配图
+        const updatedImages = appState.currentArticle.images.map(img =>
+          img.id === imageId 
+            ? { ...img, id: `img_${Date.now()}`, url: newImageUrl }
+            : img
+        );
+
+        setAppState(prev => ({
+          ...prev,
+          currentArticle: prev.currentArticle ? {
+            ...prev.currentArticle,
+            images: updatedImages
+          } : undefined
+        }));
+
+        toast.success('配图已重新生成！');
+      }
+    } catch (error) {
+      console.error('图片重新生成失败:', error);
+      toast.error('图片重新生成失败，请重试');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // 删除图片
+  const deleteImage = (imageId: string) => {
+    if (!appState.currentArticle) return;
+
+    if (imageId.startsWith('cover_')) {
+      // 删除封面
+      setAppState(prev => ({
+        ...prev,
+        currentArticle: prev.currentArticle ? {
+          ...prev.currentArticle,
+          coverImage: undefined
+        } : undefined
+      }));
+      toast.success('封面已删除');
+    } else {
+      // 删除配图
+      const updatedImages = appState.currentArticle.images.filter(img => img.id !== imageId);
+      
+      setAppState(prev => ({
+        ...prev,
+        currentArticle: prev.currentArticle ? {
+          ...prev.currentArticle,
+          images: updatedImages
+        } : undefined
+      }));
+      toast.success('配图已删除');
+    }
+  };
+
   // 更新大纲
   const updateOutline = (outline: OutlineNode[]) => {
     setAppState(prev => ({
@@ -827,6 +918,8 @@ ${appState.currentArticle.outline.map(node => {
     performExternalSearch,
     generateImages,
     generateCover,
+    regenerateImage,
+    deleteImage,
     updateOutline,
     updateContent,
     exportArticle,
