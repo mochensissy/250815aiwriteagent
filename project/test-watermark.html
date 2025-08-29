@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>无水印图片测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .image-container {
+            margin: 10px 0;
+        }
+        .image-container img {
+            max-width: 300px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+    </style>
+</head>
+<body>
+    <h1>🚫 无水印图片功能测试</h1>
+    
+    <div class="test-section">
+        <h2>测试1: Lorem Picsum 无水印图片</h2>
+        <p>这个测试使用 Lorem Picsum API 获取完全无水印的随机图片</p>
+        <button onclick="testLoremPicsum()">生成无水印图片</button>
+        <div id="picsum-status"></div>
+        <div id="picsum-images"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>测试2: 模拟应用中的图片生成</h2>
+        <p>这个测试模拟应用中的图片生成流程（强制无水印模式）</p>
+        <button onclick="testAppImageGeneration()">模拟应用生成</button>
+        <div id="app-status"></div>
+        <div id="app-images"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>测试结果说明</h2>
+        <ul>
+            <li>✅ <strong>无水印</strong>: 图片右下角没有任何"AI生成"或其他标识</li>
+            <li>✅ <strong>高质量</strong>: 图片清晰，分辨率良好</li>
+            <li>✅ <strong>快速加载</strong>: 图片加载速度快</li>
+            <li>❌ <strong>有水印</strong>: 如果看到水印，说明需要进一步优化</li>
+        </ul>
+    </div>
+
+    <script>
+        // 测试 Lorem Picsum 无水印图片
+        function testLoremPicsum() {
+            const statusDiv = document.getElementById('picsum-status');
+            const imagesDiv = document.getElementById('picsum-images');
+            
+            statusDiv.innerHTML = '<div class="status info">🔄 正在生成无水印图片...</div>';
+            imagesDiv.innerHTML = '';
+            
+            // 生成3张不同的无水印图片
+            for (let i = 0; i < 3; i++) {
+                const imageUrl = `https://picsum.photos/300/200?random=${Math.floor(Math.random() * 1000)}`;
+                
+                const imgContainer = document.createElement('div');
+                imgContainer.className = 'image-container';
+                
+                const img = document.createElement('img');
+                img.src = imageUrl;
+                img.alt = `无水印测试图片 ${i + 1}`;
+                img.onload = () => {
+                    console.log(`✅ 图片 ${i + 1} 加载成功: ${imageUrl}`);
+                };
+                img.onerror = () => {
+                    console.error(`❌ 图片 ${i + 1} 加载失败: ${imageUrl}`);
+                };
+                
+                const caption = document.createElement('p');
+                caption.textContent = `图片 ${i + 1}: ${imageUrl}`;
+                caption.style.fontSize = '12px';
+                caption.style.color = '#666';
+                
+                imgContainer.appendChild(img);
+                imgContainer.appendChild(caption);
+                imagesDiv.appendChild(imgContainer);
+            }
+            
+            statusDiv.innerHTML = '<div class="status success">✅ 无水印图片生成完成！请检查右下角是否有水印。</div>';
+        }
+
+        // 测试应用中的图片生成逻辑
+        function testAppImageGeneration() {
+            const statusDiv = document.getElementById('app-status');
+            const imagesDiv = document.getElementById('app-images');
+            
+            statusDiv.innerHTML = '<div class="status info">🔄 模拟应用图片生成流程...</div>';
+            imagesDiv.innerHTML = '';
+            
+            // 模拟应用中的强制无水印模式
+            console.log('🎨 开始图片生成流程', { forceWatermarkFree: true });
+            console.log('🚫 强制无水印模式，跳过豆包API');
+            
+            // 模拟生成3张配图
+            const prompts = [
+                '温馨的家庭聚餐场景',
+                '现代办公室工作环境',
+                '自然风光摄影'
+            ];
+            
+            prompts.forEach((prompt, i) => {
+                console.log(`🌅 尝试获取无水印图片 - ${prompt}`);
+                
+                const imageUrl = `https://picsum.photos/300/200?random=${Math.floor(Math.random() * 1000)}`;
+                
+                const imgContainer = document.createElement('div');
+                imgContainer.className = 'image-container';
+                
+                const img = document.createElement('img');
+                img.src = imageUrl;
+                img.alt = prompt;
+                
+                const caption = document.createElement('p');
+                caption.innerHTML = `<strong>${prompt}</strong><br><small>${imageUrl}</small>`;
+                caption.style.fontSize = '12px';
+                caption.style.color = '#666';
+                
+                imgContainer.appendChild(img);
+                imgContainer.appendChild(caption);
+                imagesDiv.appendChild(imgContainer);
+                
+                console.log(`✅ 无水印图片获取成功: ${imageUrl}`);
+            });
+            
+            statusDiv.innerHTML = '<div class="status success">✅ 应用模拟测试完成！这些图片应该完全无水印。</div>';
+        }
+
+        // 页面加载时显示说明
+        window.onload = function() {
+            console.log('🧪 无水印图片测试页面已加载');
+            console.log('📋 测试说明:');
+            console.log('1. 点击按钮生成测试图片');
+            console.log('2. 检查图片右下角是否有"AI生成"水印');
+            console.log('3. 所有图片都应该完全无水印');
+        };
+    </script>
+</body>
+</html>

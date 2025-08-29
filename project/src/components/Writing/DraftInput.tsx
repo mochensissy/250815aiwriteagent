@@ -7,6 +7,7 @@
 
 import React, { useState } from 'react';
 import { Send, Search, Sparkles, FileText, ArrowRight, Globe, Smartphone, Video } from 'lucide-react';
+import LoadingSpinner from '../Common/LoadingSpinner';
 import { StylePrototype } from '../../types';
 
 interface DraftInputProps {
@@ -331,7 +332,7 @@ const DraftInput: React.FC<DraftInputProps> = ({
           >
             {isProcessing ? (
               <>
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <LoadingSpinner size="sm" color="gray" />
                 {processingStatus}
               </>
             ) : (

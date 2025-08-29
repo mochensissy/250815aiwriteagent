@@ -393,13 +393,45 @@ export const callOpenRouterAPI = async (prompt: string): Promise<string> => {
  * 调用豆包生图API生成图片
  * 根据火山引擎文档更新API调用格式
  */
-export const generateImage = async (prompt: string, size = '1024x1024'): Promise<string> => {
+export const generateImage = async (prompt: string, size = '1024x1024', forceWatermarkFree = true): Promise<string> => {
+  console.log('🎨 开始图片生成流程', { forceWatermarkFree });
+  
+  // 如果强制无水印，直接使用无水印方案
+  if (forceWatermarkFree) {
+    console.log('🚫 强制无水印模式，跳过豆包API');
+    try {
+      return await generateImageWithUnsplash(prompt);
+    } catch (error) {
+      console.log('⚠️ 无水印方案失败，回退到豆包...', error);
+      return await generateImageWithDoubao(prompt, size);
+    }
+  }
+  
+  // 方案1: 尝试豆包API（可能有水印）
   try {
-    const config = getAPIConfig();
-    console.log('🎨 调用豆包生图API');
-    console.log('📝 图片描述:', prompt);
-    console.log('📏 图片尺寸:', size);
+    return await generateImageWithDoubao(prompt, size);
+  } catch (error) {
+    console.log('⚠️ 豆包生成失败，尝试备选方案...', error);
     
+    // 方案2: 使用免费的无水印图片API
+    try {
+      return await generateImageWithUnsplash(prompt);
+    } catch (unsplashError) {
+      console.log('⚠️ 无水印方案失败，使用豆包结果...', unsplashError);
+      // 如果所有方案都失败，重新尝试豆包
+      return await generateImageWithDoubao(prompt, size);
+    }
+  }
+};
+
+// 豆包图片生成
+const generateImageWithDoubao = async (prompt: string, size: string): Promise<string> => {
+  const config = getAPIConfig();
+  console.log('🎨 调用豆包生图API');
+  console.log('📝 图片描述:', prompt);
+  console.log('📏 图片尺寸:', size);
+  
+  try {
     // 根据火山引擎文档的调用格式
     const response = await fetch(config.doubao.endpoint, {
       method: 'POST',
@@ -409,7 +441,7 @@ export const generateImage = async (prompt: string, size = '1024x1024'): Promise
       },
       body: JSON.stringify({
         model: config.doubao.model,
-        prompt: prompt,
+        prompt: `${prompt}, raw photography, clean composition, commercial stock photo, professional quality, no text, no watermarks, no overlays, no branding, pure image content, studio shot, high resolution, commercial license`,
         n: 1,
         size: size,
         response_format: 'url'
@@ -443,6 +475,44 @@ export const generateImage = async (prompt: string, size = '1024x1024'): Promise
     console.error('❌ 豆包生图API调用失败:', error);
     throw error;
   }
+};
+
+// 使用免费图片API获取无水印图片
+const generateImageWithUnsplash = async (prompt: string): Promise<string> => {
+  console.log('🌅 尝试获取无水印图片');
+  
+  // 从prompt中提取关键词
+  const keywords = extractKeywordsFromPrompt(prompt);
+  const query = keywords.slice(0, 2).join(' ') || 'professional photography';
+  
+  console.log('🔍 搜索关键词:', query);
+  
+  try {
+    // 使用Picsum作为无水印图片源（Lorem Picsum）
+    const imageUrl = `https://picsum.photos/1024/1024?random=${Math.floor(Math.random() * 1000)}`;
+    
+    console.log('✅ 无水印图片获取成功:', imageUrl);
+    return imageUrl;
+  } catch (error) {
+    console.log('❌ 无水印图片获取失败:', error);
+    throw error;
+  }
+};
+
+// 从提示词中提取关键词
+const extractKeywordsFromPrompt = (prompt: string): string[] => {
+  // 移除常见的摄影术语，保留主要内容关键词
+  const cleanPrompt = prompt
+    .replace(/professional photography|high quality|clean image|studio lighting|commercial/gi, '')
+    .replace(/no watermarks|no text|no logos/gi, '');
+  
+  // 提取英文关键词
+  const englishWords = cleanPrompt.match(/[a-zA-Z]{3,}/g) || [];
+  
+  // 提取中文关键词  
+  const chineseWords = cleanPrompt.match(/[\u4e00-\u9fa5]{2,}/g) || [];
+  
+  return [...englishWords, ...chineseWords].filter(word => word.length > 2).slice(0, 5);
 };
 
 /**
@@ -660,40 +730,53 @@ export const generateOutline = async (draft: string, styleContext: string): Prom
   console.log('🎨 风格上下文:', styleContext);
 
   const prompt = `
-你是一位经验丰富的微信公众号编辑，请基于用户草稿生成实用的文章大纲。
+你是一位专业的微信公众号编辑，擅长将用户的真实经历和想法整理成自然、口语化的文章结构。
 
-用户草稿内容：
+**用户原始内容（类似录音整理）：**
 ---
 ${draft}
 ---
 
-个人写作风格：
-${styleContext}
+**个人写作风格参考：**
+${styleContext || '保持自然、真实、接地气的表达方式'}
 
 **任务要求：**
 
-1. **深度分析草稿核心内容**，提炼出逻辑清晰的内容结构
-2. **每个小标题都要如实反映该部分的内容**，帮助读者理解文章脉络
-3. **小标题应该简洁明了**，便于用户快速了解要写什么
+1. **理解用户真实想表达的内容**，提炼出自然的分享逻辑
+2. **小标题要像真人说话一样自然**，避免过于正式或书面化
+3. **保持原始内容的真实感和个人色彩**，不要让标题显得很"AI"
 
 **小标题创作规则：**
-- 用简洁的陈述句描述该部分的主要内容
-- 避免过度营销化的语言，注重实用性
-- 每个标题要准确概括该部分要表达的核心观点
-- 保持逻辑顺序和内容连贯性
+- 使用口语化、自然的表达方式，避免文绉绉的标题
+- 就像在和朋友聊天时会说的话一样自然
+- 避免过度营销化或AI痕迹的语言
+- 每个标题要真实反映该部分要分享的内容
+- 保持逻辑顺序，让读者容易跟上思路
 
-**大纲结构（4-5个部分）：**
-1. **开篇部分**：引出话题背景或个人经历
-2. **核心内容1**：基于草稿的第一个重点论述
+**大纲结构要求：**
+- **2000字左右文章建议4-6个小标题**
+- **每个部分300-500字，内容充实有深度**
+- **避免过度细分，保持内容的完整性**
+
+**标准结构（4-6个部分）：**
+1. **开篇部分**：引出话题背景或个人经历（300-400字）
+2. **核心内容1**：基于草稿的第一个重点论述（400-500字）
 3. **核心内容2**：基于草稿的第二个重点论述  
 4. **深入分析**：提供更深层的思考或分析
 5. **总结建议**：给出具体的行动建议或总结
 
-**标题示例：**
-- "我的亲身经历：关于XXX的思考"
-- "第一个发现：XXX背后的真实情况"
-- "深度分析：为什么XXX会产生这种现象"
-- "实用建议：如何更好地应对XXX"
+**标题示例（口语化风格）：**
+- "说说我遇到的那件事"
+- "这里面有个问题我想和大家聊聊"
+- "后来我想明白了一个道理"
+- "给大家分享几个小建议"
+- "其实这事没那么复杂"
+- "我的一点小感悟"
+
+**重要要求：**
+- **严格控制在4-6个小标题之间**
+- **每个标题对应300-500字内容**
+- **不要过度细分，保持内容完整性**
 
 请返回JSON格式，每个标题要包含概述说明：
 [
@@ -706,7 +789,7 @@ ${styleContext}
   }
 ]
 
-**重要提醒：小标题要实用、准确，概述要说明该部分的具体写作内容！**
+**最终提醒：2000字文章最多6个小标题，每个部分要有足够的内容深度！**
 `;
 
   try {
@@ -824,34 +907,128 @@ export const generateFullArticle = async (
   externalInsights?: string
 ): Promise<string> => {
   const prompt = `
-基于以下信息生成一篇完整的文章：
+## 定位
+你是一位专业的内容转换专家，专注于将口语化的录音文字整理为适合微信公众号发表的优质文章。
 
-原始草稿：
+## 能力
+1. **编辑优化**：精简冗余内容，合并重复部分，使文章更加流畅自然。
+2. **保持原意**：确保整理后的文章忠实于原始录音内容和语气。
+3. **语言风格**：使用自然、口语化的表达方式，避免过于书面化或AI痕迹。
+
+## 知识储备
+1. 熟悉微信公众号的写作特点和读者偏好。
+2. 具备中文写作能力，能够调整文章结构以适应平台要求。
+3. 了解如何通过简洁明了的语言吸引读者关注。
+
+---
+
+现在请基于以下素材生成一篇微信公众号文章：
+
+**原始内容（类似录音整理）：**
 ${draft}
 
-文章大纲：
+**文章结构大纲：**
 ${outline.map(node => `${node.level === 1 ? '# ' : '## '}${node.title}`).join('\n')}
 
-个人风格要求：
-${styleContext}
+**个人写作风格参考：**
+${styleContext || '保持自然、真实、接地气的表达方式'}
 
-${externalInsights ? `外部搜索增强信息：\n${externalInsights}\n` : ''}
+${externalInsights ? `**补充信息：**\n${externalInsights}\n` : ''}
 
-请生成一篇结构完整、风格一致的文章，要求：
-1. 严格按照大纲结构展开
-2. 融入个人风格特征
-3. 逻辑清晰，论证充分
-4. 语言生动，易于阅读
+**重要写作要求：**
 
-直接返回Markdown格式的文章内容。
+1. **内容要求**：
+   - **直接输出文章内容，不要任何AI回复性质的开头**
+   - **绝对不要出现"好的，我来为您生成..."等大模型回复**
+   - **严格按照大纲结构展开，每个标题下都要有充实的内容**
+   - **保持原始内容的真实感和个人色彩**
+
+2. **开头要求**：
+   - **直接进入主题，不要寒暄**
+   - **绝对禁止使用"嘿朋友们"、"大家好"、"各位朋友"等自媒体式开头**
+   - **不要使用"今天我想和大家聊聊"等口播稿式表达**
+   - **开头应该直接描述场景、事件或感受**
+
+3. **语言风格**：
+   - 使用口语化、自然的表达方式
+   - 就像在写日记或向朋友分享经历
+   - 拒绝AI痕迹和自媒体腔调
+   - 真诚、真实、不装腔作势
+
+4. **结构要求**：
+   - 每个段落都要有实质内容，避免空话套话
+   - 段落要短，便于手机阅读
+   - 逻辑清晰，情感真实
+   - 结尾自然，不要刻意总结
+
+**格式要求：直接输出文章内容，不要任何额外的说明文字。文章应该像一篇真实的个人分享，而不是AI生成的内容。**
 `;
 
   try {
-    return await callOpenRouterAPI(prompt);
+    const rawResult = await callOpenRouterAPI(prompt);
+    
+    // 清理AI回复式的开头和结尾
+    const cleanedResult = cleanAIResponse(rawResult);
+    
+    return cleanedResult;
   } catch (error) {
     console.error('文章生成失败:', error);
     throw error;
   }
+};
+
+/**
+ * 清理AI回复式的内容
+ */
+const cleanAIResponse = (content: string): string => {
+  let cleaned = content.trim();
+  
+  // 移除常见的AI回复开头
+  const aiResponses = [
+    /^好的，.*?[：:]/,
+    /^当然.*?[：:]/,
+    /^我来.*?[：:]/,
+    /^为您.*?[：:]/,
+    /^根据.*?，.*?[：:]/,
+    /^基于.*?，.*?[：:]/,
+    /^以下是.*?[：:]/,
+    /^这是.*?[：:]/,
+    /^我会.*?[：:]/,
+    /^让我.*?[：:]/
+  ];
+  
+  // 移除自媒体式开头
+  const socialMediaOpeners = [
+    /^嘿[，,]?朋友们[！!，,]*/,
+    /^大家好[！!，,]*/,
+    /^各位朋友[！!，,]*/,
+    /^朋友们[！!，,]*/,
+    /^今天.*?和大家聊聊/,
+    /^今天.*?想跟大家分享/,
+    /^今天.*?来跟大家说说/
+  ];
+  
+  // 应用清理规则
+  [...aiResponses, ...socialMediaOpeners].forEach(pattern => {
+    cleaned = cleaned.replace(pattern, '');
+  });
+  
+  // 移除多余的换行符
+  cleaned = cleaned.replace(/^\n+/, '');
+  
+  // 移除常见的结尾总结
+  const aiEndings = [
+    /\n*希望这篇文章.*$/,
+    /\n*以上就是.*$/,
+    /\n*这就是.*分享.*$/,
+    /\n*感谢.*阅读.*$/
+  ];
+  
+  aiEndings.forEach(pattern => {
+    cleaned = cleaned.replace(pattern, '');
+  });
+  
+  return cleaned.trim();
 };
 
 /**
@@ -863,16 +1040,23 @@ export const processEditInstruction = async (
   selectedText?: string
 ): Promise<string> => {
   const prompt = `
-用户想要修改以下内容：
+你是一位专业的微信公众号编辑，擅长用自然、口语化的方式优化文章内容。
 
+**编辑任务：**
 ${selectedText ? `选中的文本：\n${selectedText}\n\n` : ''}
 
 完整内容：
 ${content}
 
-修改指令：${instruction}
+用户的修改要求：${instruction}
 
-请根据指令进行修改，只返回修改后的${selectedText ? '选中部分' : '完整'}内容，不要包含其他解释。
+**编辑原则：**
+1. **保持口语化风格**：使用自然、真实的表达方式，避免过于书面化
+2. **保持原意和语气**：不改变作者的本意和个人色彩
+3. **增强可读性**：让文字更流畅、更容易理解
+4. **符合公众号特色**：适合手机阅读，段落简洁有力
+
+请根据用户要求进行修改，只返回修改后的${selectedText ? '选中部分' : '完整'}内容，保持自然、真实的语气，就像一个真实的人在分享自己的想法和经历。
 `;
 
   try {
@@ -884,38 +1068,458 @@ ${content}
 };
 
 /**
- * 生成配图提示词
+ * 生成文章标题
  */
-export const generateImagePrompts = async (content: string): Promise<string[]> => {
+export const generateArticleTitles = async (content: string, outline: any[]): Promise<string[]> => {
+  console.log('📝 开始生成文章标题...');
+  
   const prompt = `
-分析以下文章内容，为其生成3张配图的提示词：
+基于以下文章内容和大纲，生成吸引人的微信公众号标题：
 
-${content}
+文章内容：
+${content.substring(0, 500)}...
 
-请为文章生成3个不同位置的配图描述，要求：
-1. 符合文章主题和氛围
-2. 画面描述具体详细
-3. 适合作为插图使用
+文章大纲：
+${outline.map(node => `- ${node.title}`).join('\n')}
 
-返回JSON数组格式，每个元素为一个图片描述字符串。
+标题生成要求：
+1. **标题字数**：确保标题长度在7-18字之间为佳，核心信息尽量在前7个字呈现
+2. **吸引力**：要能增加读者想点进来的冲动
+3. **风格**：自然、口语化，避免过于夸张或标题党
+4. **关键词前置**：最重要的关键词要在前面
+5. **情感共鸣**：能触动读者的情感或好奇心
+6. **真实性**：符合文章实际内容，不夸大不误导
 
-示例：
-[
-  "科技感的未来城市景观，蓝色调，现代化建筑",
-  "抽象的数据流动图，几何图形，渐变色彩",
-  "简约的商业图表，柱状图，专业配色"
-]
+请生成8个不同风格的标题选项：
+- 2个 疑问式标题（激发好奇）
+- 2个 分享式标题（个人经历感受）
+- 2个 干货式标题（实用价值）
+- 2个 情感式标题（触动共鸣）
+
+返回JSON数组格式：
+["标题1", "标题2", "标题3", "标题4", "标题5", "标题6", "标题7", "标题8"]
+
+要求每个标题都要：
+- 字数控制在7-18字
+- 自然不做作
+- 能准确反映文章内容
+- 有点击欲望但不是标题党
 `;
 
   try {
     const result = await callOpenRouterAPI(prompt);
+    console.log('🤖 AI标题生成结果:', result);
+    
     try {
-      return JSON.parse(result);
-    } catch {
-      return result.split('\n').filter(line => line.trim());
+      // 尝试解析JSON
+      const titles = JSON.parse(result);
+      if (Array.isArray(titles) && titles.length > 0) {
+        console.log('✅ 成功生成标题:', titles);
+        return titles.slice(0, 8); // 最多8个标题
+      }
+    } catch (parseError) {
+      console.log('⚠️ JSON解析失败，尝试提取标题...');
+      
+      // 备用解析：提取引号中的内容
+      const lines = result.split('\n');
+      const titles: string[] = [];
+      
+      for (const line of lines) {
+        // 查找引号中的内容
+        const matches = line.match(/"([^"]+)"/g);
+        if (matches) {
+          matches.forEach(match => {
+            const title = match.replace(/"/g, '').trim();
+            if (title.length >= 5 && title.length <= 25 && !titles.includes(title)) {
+              titles.push(title);
+            }
+          });
+        }
+      }
+      
+      if (titles.length > 0) {
+        console.log('✅ 备用解析成功:', titles);
+        return titles.slice(0, 8);
+      }
     }
+    
+    // 最终备用方案：基于内容生成简单标题
+    console.log('⚠️ 使用备用标题方案...');
+    const firstLine = content.split('\n')[0]?.replace(/^#+\s*/, '') || '';
+    const baseTitle = firstLine.substring(0, 12) || '我的一些想法';
+    
+    return [
+      baseTitle,
+      `关于${baseTitle.substring(0, 8)}的思考`,
+      `说说${baseTitle.substring(0, 8)}这件事`,
+      `${baseTitle.substring(0, 8)}：我的亲身经历`,
+      `聊聊${baseTitle.substring(0, 8)}`,
+      `${baseTitle.substring(0, 8)}背后的故事`,
+      `我对${baseTitle.substring(0, 8)}的看法`,
+      `${baseTitle.substring(0, 8)}的一些感悟`
+    ];
+    
   } catch (error) {
-    console.error('配图提示词生成失败:', error);
-    return [];
+    console.error('❌ 标题生成失败:', error);
+    
+    // 错误时的备用方案
+    return [
+      '我的一些想法和感悟',
+      '最近发生的一件事',
+      '说说心里话',
+      '分享一些生活感悟',
+      '聊聊最近的思考',
+      '一些不成熟的想法',
+      '关于生活的思考',
+      '我想和大家聊聊'
+    ];
   }
+};
+
+/**
+ * 分析文章内容，提取关键信息
+ */
+const analyzeArticleContent = (content: string): {
+  theme: string;
+  emotion: string;
+  keywords: string[];
+  scenes: string[];
+} => {
+  const text = content.toLowerCase();
+  
+  // 情感词汇检测
+  const emotions = {
+    '温暖': ['温暖', '温馨', '感动', '暖心', '治愈', '美好', '幸福'],
+    '励志': ['努力', '奋斗', '坚持', '成长', '进步', '突破', '成功'],
+    '思考': ['思考', '反思', '感悟', '领悟', '明白', '理解', '认识'],
+    '怀念': ['回忆', '怀念', '过去', '曾经', '那时', '记得', '想起'],
+    '友情': ['朋友', '友谊', '伙伴', '同学', '闺蜜', '兄弟', '姐妹'],
+    '亲情': ['家人', '父母', '孩子', '家庭', '亲人', '妈妈', '爸爸'],
+    '工作': ['工作', '职场', '同事', '公司', '项目', '团队', '业务']
+  };
+  
+  let detectedEmotion = '温暖';
+  let maxCount = 0;
+  
+  for (const [emotion, words] of Object.entries(emotions)) {
+    const count = words.reduce((sum, word) => sum + (text.includes(word) ? 1 : 0), 0);
+    if (count > maxCount) {
+      maxCount = count;
+      detectedEmotion = emotion;
+    }
+  }
+  
+  // 提取关键词
+  const keywords: string[] = [];
+  const keywordPatterns = [
+    /咖啡厅|餐厅|办公室|学校|家里|公园|街道/g,
+    /朋友|同事|家人|老师|同学/g,
+    /电话|信件|微信|聊天|对话/g,
+    /回忆|故事|经历|感受|想法/g
+  ];
+  
+  keywordPatterns.forEach(pattern => {
+    const matches = content.match(pattern);
+    if (matches) {
+      keywords.push(...matches);
+    }
+  });
+  
+  return {
+    theme: detectedEmotion,
+    emotion: detectedEmotion,
+    keywords: [...new Set(keywords)],
+    scenes: keywords.filter(k => ['咖啡厅', '餐厅', '办公室', '学校', '家里', '公园', '街道'].includes(k))
+  };
+};
+
+/**
+ * 根据主题获取配图示例
+ */
+const getImageExamplesByTheme = (theme: string): string => {
+  const examples = {
+    '温暖': [
+      '温馨的家庭场景，柔和的灯光，暖色调，体现家的温暖',
+      '朋友间的拥抱或握手，温暖的光线，表达人与人之间的温情',
+      '一杯热茶和书本的静物，温馨的氛围，象征内心的宁静'
+    ],
+    '友情': [
+      '两个朋友在咖啡厅聊天的场景，温暖的灯光，现代简约风格',
+      '朋友间的合影或并肩而行，夕阳背景，温暖的色调',
+      '手写信件和照片的静物组合，怀旧风格，象征珍贵的友谊'
+    ],
+    '怀念': [
+      '老照片和回忆物品的静物摄影，怀旧色调，文艺风格',
+      '夕阳下的剪影，温暖的橙色调，表达对过往的怀念',
+      '旧时光的场景重现，复古色调，营造怀旧氛围'
+    ],
+    '励志': [
+      '向上攀登的人物剪影，朝阳背景，积极向上的氛围',
+      '书桌上的学习用品，明亮的光线，表达努力和进步',
+      '成功时刻的庆祝场景，明亮的色彩，传达正能量'
+    ],
+    '思考': [
+      '独自思考的人物剪影，安静的环境，深沉的色调',
+      '书本和咖啡的静物，柔和的光线，营造思考的氛围',
+      '窗边的沉思场景，自然光线，表达内心的思考'
+    ],
+    '亲情': [
+      '家庭聚餐的温馨场景，温暖的灯光，表达家庭和睦',
+      '父母与孩子的互动，柔和的色调，体现亲情的温暖',
+      '家庭照片和纪念品，温馨的布置，象征家庭的重要性'
+    ],
+    '工作': [
+      '现代办公环境，简洁明亮，体现专业和效率',
+      '团队合作的场景，积极的氛围，表达协作精神',
+      '工作成果的展示，整洁的布局，传达成就感'
+    ]
+  };
+  
+  const themeExamples = examples[theme as keyof typeof examples] || examples['温暖'];
+  return themeExamples.map((example, index) => `${index + 1}. ${example}`).join('\n');
+};
+
+/**
+ * 通用内容分析系统 - 使用AI深度理解文章内容
+ */
+const analyzeContentWithAI = async (content: string): Promise<{
+  mainTheme: string;
+  keyElements: string[];
+  sceneType: string;
+  emotionalTone: string;
+  visualKeywords: string[];
+}> => {
+  const prompt = `
+请分析以下文章内容，提取关键信息用于生成相关配图：
+
+文章内容：
+${content}
+
+请分析并返回JSON格式的结果：
+{
+  "mainTheme": "文章的主要主题（如：生活感悟、旅行见闻、工作体验、美食探索、人际关系等）",
+  "keyElements": ["文章中提到的具体事物、人物、场景等关键元素，最多8个"],
+  "sceneType": "文章描述的主要场景类型（如：室内、户外、城市、自然、办公、家庭等）",
+  "emotionalTone": "文章的整体情感色调（如：温暖、思考、怀念、欢快、平静、励志等）",
+  "visualKeywords": ["适合用于配图的视觉关键词，最多6个"]
+}
+
+要求：
+1. 分析要客观准确，基于文章实际内容
+2. keyElements要包含文章中明确提到的具体事物
+3. visualKeywords要适合用于图像生成，避免抽象概念
+4. 返回纯JSON格式，不要其他文字
+`;
+
+  try {
+    const result = await callOpenRouterAPI(prompt);
+    const analysis = JSON.parse(result);
+    console.log('🧠 AI内容分析结果:', analysis);
+    return analysis;
+  } catch (error) {
+    console.log('⚠️ AI分析失败，使用本地分析:', error);
+    return analyzeContentLocally(content);
+  }
+};
+
+/**
+ * 本地内容分析作为备选方案
+ */
+const analyzeContentLocally = (content: string): {
+  mainTheme: string;
+  keyElements: string[];
+  sceneType: string;
+  emotionalTone: string;
+  visualKeywords: string[];
+} => {
+  const text = content.toLowerCase();
+  
+  // 主题检测
+  let mainTheme = '生活感悟';
+  if (text.includes('工作') || text.includes('职场')) mainTheme = '工作体验';
+  else if (text.includes('旅行') || text.includes('游')) mainTheme = '旅行见闻';
+  else if (text.includes('美食') || text.includes('吃')) mainTheme = '美食探索';
+  else if (text.includes('朋友') || text.includes('家人')) mainTheme = '人际关系';
+  
+  // 提取关键元素（使用通用词汇匹配）
+  const keyElements: string[] = [];
+  const sentences = content.split(/[。！？]/);
+  sentences.forEach(sentence => {
+    const words = sentence.match(/[\u4e00-\u9fa5]{2,4}/g) || [];
+    words.forEach(word => {
+      if (word.length >= 2 && 
+          !['这个', '那个', '什么', '怎么', '为什么', '如果', '因为', '所以'].includes(word) &&
+          keyElements.length < 8) {
+        keyElements.push(word);
+      }
+    });
+  });
+  
+  // 场景类型检测
+  let sceneType = '生活场景';
+  if (text.includes('办公') || text.includes('公司')) sceneType = '办公环境';
+  else if (text.includes('家') || text.includes('房间')) sceneType = '家庭环境';
+  else if (text.includes('户外') || text.includes('公园') || text.includes('街道')) sceneType = '户外场景';
+  else if (text.includes('自然') || text.includes('山') || text.includes('水')) sceneType = '自然环境';
+  
+  // 情感色调
+  let emotionalTone = '平静';
+  if (text.includes('温暖') || text.includes('美好')) emotionalTone = '温暖';
+  else if (text.includes('思考') || text.includes('反思')) emotionalTone = '思考';
+  else if (text.includes('怀念') || text.includes('回忆')) emotionalTone = '怀念';
+  else if (text.includes('开心') || text.includes('快乐')) emotionalTone = '欢快';
+  
+  return {
+    mainTheme,
+    keyElements: [...new Set(keyElements)].slice(0, 8),
+    sceneType,
+    emotionalTone,
+    visualKeywords: [...new Set(keyElements)].slice(0, 6)
+  };
+};
+
+/**
+ * 生成配图提示词
+ */
+export const generateImagePrompts = async (content: string): Promise<string[]> => {
+  console.log('🎨 开始生成配图提示词...');
+  
+  // 使用AI进行深度内容分析
+  const contentAnalysis = await analyzeContentWithAI(content);
+  console.log('🧠 内容分析完成:', contentAnalysis);
+  
+  // 构建通用的配图生成提示
+  const imagePrompt = `
+你是专业的配图设计师，请基于以下文章分析结果，生成3个高质量的配图描述。
+
+【文章内容摘要】：
+${content.substring(0, 500)}${content.length > 500 ? '...' : ''}
+
+【内容分析结果】：
+- 主要主题：${contentAnalysis.mainTheme}
+- 关键元素：${contentAnalysis.keyElements.join(', ')}
+- 场景类型：${contentAnalysis.sceneType}
+- 情感色调：${contentAnalysis.emotionalTone}
+- 视觉关键词：${contentAnalysis.visualKeywords.join(', ')}
+
+【配图要求】：
+1. **主题匹配**：配图要体现"${contentAnalysis.mainTheme}"主题
+2. **元素融入**：合理融入关键元素：${contentAnalysis.keyElements.slice(0, 3).join('、')}
+3. **场景适配**：体现"${contentAnalysis.sceneType}"的环境特征
+4. **情感表达**：传达"${contentAnalysis.emotionalTone}"的情感氛围
+5. **视觉美感**：使用专业摄影构图，色彩和谐，画面简洁
+
+【风格要求】：
+- 适合文章插图的专业摄影风格
+- 色调与情感色调匹配
+- 构图简洁，主题突出
+- 避免过于复杂的元素
+- 符合现代审美
+
+请生成3个不同角度的配图描述，返回JSON格式：
+["配图描述1", "配图描述2", "配图描述3"]
+
+每个描述要：
+- 基于内容分析结果
+- 适合作为文章配图
+- 具体可执行的视觉描述
+`;
+
+  try {
+    const result = await callOpenRouterAPI(imagePrompt);
+    console.log('🎨 配图分析结果:', result);
+    
+    try {
+      // 尝试解析JSON
+      const prompts = JSON.parse(result);
+      if (Array.isArray(prompts) && prompts.length > 0) {
+        console.log('✅ 成功生成配图提示词:', prompts);
+        return prompts;
+      }
+    } catch (parseError) {
+      console.log('⚠️ JSON解析失败，尝试提取配图描述...');
+      
+      // 备用解析：提取引号中的内容
+      const lines = result.split('\n');
+      const prompts: string[] = [];
+      
+      for (const line of lines) {
+        // 查找引号中的内容
+        const matches = line.match(/"([^"]+)"/g);
+        if (matches) {
+          matches.forEach(match => {
+            const prompt = match.replace(/"/g, '').trim();
+            if (prompt.length > 20 && !prompts.includes(prompt)) {
+              prompts.push(prompt);
+            }
+          });
+        }
+      }
+      
+      if (prompts.length > 0) {
+        console.log('✅ 备用解析成功:', prompts);
+        return prompts.slice(0, 3);
+      }
+    }
+    
+    // 最终备用方案：基于本地分析生成相关配图
+    console.log('⚠️ 使用基于本地分析的备用配图方案...');
+    return generateFallbackPrompts(analysis, content);
+    
+  } catch (error) {
+    console.error('❌ 配图提示词生成失败:', error);
+    
+    // 错误时的备用方案：基于本地分析
+    const analysis = analyzeArticleContent(content);
+    return generateFallbackPrompts(analysis, content);
+  }
+};
+
+/**
+ * 生成备用配图提示词
+ */
+const generateFallbackPrompts = (analysis: any, content: string): string[] => {
+  const contentPreview = content.substring(0, 100);
+  const theme = analysis.emotion;
+  const keywords = analysis.keywords.slice(0, 3);
+  
+  const basePrompts = {
+    '友情': [
+      `朋友间温馨对话的场景，${keywords.includes('咖啡厅') ? '咖啡厅' : '温馨环境'}，暖色调，现代简约风格`,
+      `友谊象征的静物摄影，${keywords.includes('信件') ? '信件和照片' : '温暖的物品'}，柔和光线，文艺风格`,
+      `朋友并肩的剪影，夕阳背景，温暖色调，表达友谊的陪伴`
+    ],
+    '怀念': [
+      `怀旧回忆的场景，老照片和纪念品，复古色调，文艺风格`,
+      `时光流逝的意境图，温暖的夕阳，怀旧氛围，表达对过往的思念`,
+      `回忆中的美好时光，柔和的光线，温馨的色彩，营造怀念情绪`
+    ],
+    '温暖': [
+      `温馨的生活场景，柔和的灯光，暖色调，体现生活的美好`,
+      `温暖的人际互动，自然的光线，现代简约风格，表达人情温暖`,
+      `治愈系的静物摄影，温馨的布置，柔和色彩，营造温暖氛围`
+    ],
+    '励志': [
+      `积极向上的场景，明亮的光线，清新色调，传达正能量`,
+      `努力奋斗的象征，朝阳背景，温暖色彩，体现进步和成长`,
+      `成功时刻的表达，明亮的环境，现代风格，展现成就感`
+    ],
+    '思考': [
+      `安静思考的场景，柔和的光线，深沉色调，营造思考氛围`,
+      `沉思的意境图，自然光线，简约风格，表达内心的思考`,
+      `哲思的静物摄影，书本和茶杯，文艺风格，体现思考的深度`
+    ]
+  };
+  
+  const prompts = basePrompts[theme as keyof typeof basePrompts] || basePrompts['温暖'];
+  
+  // 如果有特定关键词，进行个性化调整
+  return prompts.map((prompt, index) => {
+    if (keywords.length > 0 && index === 0) {
+      // 第一张图片尽量包含文章的关键元素
+      const keywordStr = keywords.slice(0, 2).join('和');
+      return prompt.replace(/场景|环境/, `包含${keywordStr}的场景`);
+    }
+    return prompt;
+  });
 };

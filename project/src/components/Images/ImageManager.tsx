@@ -6,8 +6,9 @@
  */
 
 import React, { useState } from 'react';
-import { Image, RefreshCw, Trash2, Download, Crown } from 'lucide-react';
+import { Image, RefreshCw, Trash2, Download, Crown, Wand2, Plus, Type, CheckCircle } from 'lucide-react';
 import { GeneratedImage } from '../../types';
+import LoadingSpinner from '../Common/LoadingSpinner';
 
 interface ImageManagerProps {
   images: GeneratedImage[];
@@ -15,6 +16,10 @@ interface ImageManagerProps {
   onRegenerateImage: (imageId: string) => void;
   onDeleteImage: (imageId: string) => void;
   onGenerateCover: (style: string, platform: string) => void;
+  onGenerateImages?: () => void; // 新增：智能配图生成
+  onGenerateTitles?: () => Promise<string[]>; // 新增：标题生成
+  onSelectTitle?: (title: string) => void; // 新增：选择标题
+  currentTitle?: string; // 新增：当前标题
   isGenerating: boolean;
 }
 
@@ -24,29 +29,62 @@ const ImageManager: React.FC<ImageManagerProps> = ({
   onRegenerateImage,
   onDeleteImage,
   onGenerateCover,
+  onGenerateImages,
+  onGenerateTitles,
+  onSelectTitle,
+  currentTitle = '新文章',
   isGenerating
 }) => {
   const [showCoverGenerator, setShowCoverGenerator] = useState(false);
   const [selectedStyle, setSelectedStyle] = useState('科技感');
   const [selectedPlatform, setSelectedPlatform] = useState('公众号');
+  const [showTitleGenerator, setShowTitleGenerator] = useState(false);
+  const [generatedTitles, setGeneratedTitles] = useState<string[]>([]);
+  const [isGeneratingTitles, setIsGeneratingTitles] = useState(false);
 
   const coverStyles = [
-    { value: '科技感', label: '科技感', description: '现代、简洁、蓝色调' },
-    { value: '卡通', label: '卡通风', description: '可爱、生动、彩色' },
-    { value: '纪实', label: '纪实风', description: '真实、自然、质感' },
-    { value: '商务', label: '商务风', description: '专业、严谨、简约' }
+    { value: '科技感', label: '科技感', description: '现代、简洁、蓝色调', color: 'bg-blue-50 border-blue-200' },
+    { value: '温暖治愈', label: '温暖治愈', description: '温馨、柔和、暖色调', color: 'bg-orange-50 border-orange-200' },
+    { value: '商务专业', label: '商务专业', description: '专业、严谨、简约', color: 'bg-gray-50 border-gray-200' },
+    { value: '创意艺术', label: '创意艺术', description: '个性、创新、多彩', color: 'bg-purple-50 border-purple-200' },
+    { value: '简约清新', label: '简约清新', description: '清爽、干净、绿色调', color: 'bg-green-50 border-green-200' },
+    { value: '时尚潮流', label: '时尚潮流', description: '时尚、前卫、渐变', color: 'bg-pink-50 border-pink-200' }
   ];
 
   const platforms = [
-    { value: '公众号', label: '公众号', ratio: '16:9' },
-    { value: '小红书', label: '小红书', ratio: '3:4' },
-    { value: '知乎', label: '知乎', ratio: '16:9' },
-    { value: '头条', label: '今日头条', ratio: '16:9' }
+    { value: '公众号', label: '微信公众号', ratio: '16:9', description: '横版封面，适合长文章' },
+    { value: '小红书', label: '小红书', ratio: '3:4', description: '竖版封面，突出视觉效果' },
+    { value: '知乎', label: '知乎', ratio: '16:9', description: '横版封面，专业简洁' },
+    { value: '头条', label: '今日头条', ratio: '16:9', description: '横版封面，吸引眼球' }
   ];
 
   const handleGenerateCover = () => {
     onGenerateCover(selectedStyle, selectedPlatform);
     setShowCoverGenerator(false);
+  };
+
+  // 处理标题生成
+  const handleGenerateTitles = async () => {
+    if (!onGenerateTitles) return;
+    
+    setIsGeneratingTitles(true);
+    try {
+      const titles = await onGenerateTitles();
+      setGeneratedTitles(titles);
+      setShowTitleGenerator(true);
+    } catch (error) {
+      console.error('标题生成失败:', error);
+    } finally {
+      setIsGeneratingTitles(false);
+    }
+  };
+
+  // 选择标题
+  const handleSelectTitle = (title: string) => {
+    if (onSelectTitle) {
+      onSelectTitle(title);
+      setShowTitleGenerator(false);
+    }
   };
 
   return (
@@ -56,13 +94,53 @@ const ImageManager: React.FC<ImageManagerProps> = ({
           <Image className="w-5 h-5 mr-2 text-green-400" />
           图片管理
         </h3>
-        <button
-          onClick={() => setShowCoverGenerator(true)}
-          className="px-3 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-sm rounded-lg transition-all duration-200 flex items-center gap-1"
-        >
-          <Crown className="w-3 h-3" />
-          生成封面
-        </button>
+        <div className="flex gap-2">
+          {onGenerateImages && (
+            <button
+              onClick={onGenerateImages}
+              disabled={isGenerating}
+              className="px-3 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:from-gray-600 disabled:to-gray-600 text-white text-sm rounded-lg transition-all duration-200 flex items-center gap-1"
+            >
+              {isGenerating ? <LoadingSpinner size="sm" color="gray" /> : <Wand2 className="w-3 h-3" />}
+              {isGenerating ? '生成中...' : '智能配图'}
+            </button>
+          )}
+          <button
+            onClick={() => setShowCoverGenerator(true)}
+            disabled={isGenerating}
+            className="px-3 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-600 disabled:to-gray-600 text-white text-sm rounded-lg transition-all duration-200 flex items-center gap-1"
+          >
+            <Crown className="w-3 h-3" />
+            生成封面
+          </button>
+        </div>
+      </div>
+
+      {/* 标题管理 */}
+      <div className="mb-6">
+        <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center">
+          <Type className="w-4 h-4 mr-2 text-yellow-400" />
+          标题管理
+        </h4>
+        
+        <div className="bg-gray-800 rounded-lg p-4 mb-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-gray-400">当前标题</span>
+            {onGenerateTitles && (
+              <button
+                onClick={handleGenerateTitles}
+                disabled={isGeneratingTitles || isGenerating}
+                className="px-2 py-1 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 disabled:from-gray-600 disabled:to-gray-600 text-white text-xs rounded-md transition-all duration-200 flex items-center gap-1"
+              >
+                {isGeneratingTitles ? <LoadingSpinner size="sm" color="gray" /> : <Plus className="w-3 h-3" />}
+                {isGeneratingTitles ? '生成中...' : '生成标题'}
+              </button>
+            )}
+          </div>
+          <div className="text-sm text-white bg-gray-700 rounded p-2">
+            {currentTitle}
+          </div>
+        </div>
       </div>
 
       {/* 封面图片 */}
@@ -133,8 +211,18 @@ const ImageManager: React.FC<ImageManagerProps> = ({
       {images.length === 0 && !coverImage && (
         <div className="text-center py-8 text-gray-500">
           <Image className="w-12 h-12 mx-auto mb-3 opacity-50" />
-          <p>还没有生成图片</p>
-          <p className="text-sm">生成文章后可添加配图</p>
+          <p className="mb-2">还没有生成图片</p>
+          <p className="text-sm mb-4">为文章添加精美配图，提升阅读体验</p>
+          {onGenerateImages && (
+            <button
+              onClick={onGenerateImages}
+              disabled={isGenerating}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white text-sm rounded-lg transition-colors flex items-center gap-2 mx-auto"
+            >
+              <Plus className="w-4 h-4" />
+              {isGenerating ? '生成中...' : '开始生成配图'}
+            </button>
+          )}
         </div>
       )}
 
@@ -155,8 +243,8 @@ const ImageManager: React.FC<ImageManagerProps> = ({
                     onClick={() => setSelectedStyle(style.value)}
                     className={`p-3 border-2 rounded-lg text-left transition-all ${
                       selectedStyle === style.value
-                        ? 'border-purple-500 bg-purple-50'
-                        : 'border-gray-200 hover:border-purple-300'
+                        ? `border-purple-500 ${style.color}`
+                        : `border-gray-200 hover:border-purple-300 ${style.color}`
                     }`}
                   >
                     <div className="font-medium text-sm">{style.label}</div>
@@ -170,17 +258,24 @@ const ImageManager: React.FC<ImageManagerProps> = ({
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 发布平台
               </label>
-              <select
-                value={selectedPlatform}
-                onChange={(e) => setSelectedPlatform(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-              >
+              <div className="space-y-2">
                 {platforms.map((platform) => (
-                  <option key={platform.value} value={platform.value}>
-                    {platform.label} ({platform.ratio})
-                  </option>
+                  <label key={platform.value} className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="platform"
+                      value={platform.value}
+                      checked={selectedPlatform === platform.value}
+                      onChange={(e) => setSelectedPlatform(e.target.value)}
+                      className="mr-3 text-purple-600"
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium text-sm">{platform.label}</div>
+                      <div className="text-xs text-gray-500">{platform.description} • {platform.ratio}</div>
+                    </div>
+                  </label>
                 ))}
-              </select>
+              </div>
             </div>
 
             <div className="flex gap-3">
@@ -197,6 +292,89 @@ const ImageManager: React.FC<ImageManagerProps> = ({
               >
                 {isGenerating ? '生成中...' : '生成封面'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 标题选择器模态框 */}
+      {showTitleGenerator && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg w-96 max-h-96 overflow-y-auto">
+            <div className="sticky top-0 bg-white p-4 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold flex items-center">
+                  <Type className="w-5 h-5 mr-2 text-yellow-600" />
+                  选择标题
+                </h3>
+                <button
+                  onClick={() => setShowTitleGenerator(false)}
+                  className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="text-sm text-gray-600 mt-2">
+                点击选择合适的标题，或点击"生成标题"获取更多选项
+              </p>
+            </div>
+            
+            <div className="p-4">
+              {generatedTitles.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <Type className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>暂无生成的标题</p>
+                  <p className="text-sm">请点击"生成标题"按钮</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {generatedTitles.map((title, index) => (
+                    <div
+                      key={index}
+                      onClick={() => handleSelectTitle(title)}
+                      className={`p-3 rounded-lg border-2 cursor-pointer transition-all duration-200 hover:bg-blue-50 hover:border-blue-300 ${
+                        title === currentTitle 
+                          ? 'border-blue-500 bg-blue-50' 
+                          : 'border-gray-200 hover:shadow-sm'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-900 flex-1">
+                          {title}
+                        </span>
+                        {title === currentTitle && (
+                          <CheckCircle className="w-4 h-4 text-blue-600 ml-2" />
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="text-xs text-gray-500">
+                          {title.length}字
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          {['疑问式', '分享式', '干货式', '情感式'][Math.floor(index / 2)]}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              <div className="mt-4 pt-4 border-t border-gray-200 flex gap-2">
+                <button
+                  onClick={handleGenerateTitles}
+                  disabled={isGeneratingTitles}
+                  className="flex-1 py-2 px-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white text-sm rounded-lg transition-colors flex items-center justify-center gap-1"
+                >
+                  {isGeneratingTitles ? <LoadingSpinner size="sm" color="gray" /> : <Plus className="w-4 h-4" />}
+                  {isGeneratingTitles ? '生成中...' : '重新生成'}
+                </button>
+                <button
+                  onClick={() => setShowTitleGenerator(false)}
+                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  取消
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -7,7 +7,7 @@
 
 import React, { useState } from 'react';
 import { Toaster } from 'react-hot-toast';
-import { Settings } from 'lucide-react';
+import { Settings, TestTube, Zap } from 'lucide-react';
 import Sidebar from './components/Layout/Sidebar';
 import DraftInput from './components/Writing/DraftInput';
 import ArticleSelection from './components/Writing/ArticleSelection';
@@ -20,6 +20,7 @@ import { useAppState } from './hooks/useAppState';
 import { generateOutline } from './utils/api';
 import { KnowledgeBaseArticle, StylePrototype } from './types';
 import { generateImage } from './utils/api';
+import { testCompleteWritingFlow, quickAPITest } from './utils/e2eTest';
 
 function App() {
   const {
@@ -43,6 +44,8 @@ function App() {
     deleteImage,
     updateOutline,
     updateContent,
+    generateTitles,
+    setSelectedTitle,
     exportArticle,
     updateAPIConfig
   } = useAppState();
@@ -155,6 +158,39 @@ function App() {
   // 图片管理事件处理器直接使用hook中的方法
   const handleRegenerateImage = regenerateImage;
   const handleDeleteImage = deleteImage;
+
+  // 端到端测试函数
+  const handleE2ETest = async () => {
+    console.log('🚀 开始端到端测试...');
+    try {
+      const result = await testCompleteWritingFlow();
+      if (result.success) {
+        toast.success('🎉 端到端测试全部通过！');
+      } else {
+        toast.error('⚠️ 部分测试失败，请查看控制台');
+      }
+    } catch (error) {
+      console.error('测试失败:', error);
+      toast.error('测试过程出现异常');
+    }
+  };
+
+  // 快速API测试函数
+  const handleQuickTest = async () => {
+    console.log('⚡ 快速API测试...');
+    try {
+      const result = await quickAPITest();
+      const successCount = Object.values(result).filter(v => v === true).length;
+      if (successCount === 2) {
+        toast.success('✅ 所有API连接正常');
+      } else {
+        toast.error(`⚠️ ${2 - successCount}个API连接异常`);
+      }
+    } catch (error) {
+      console.error('快速测试失败:', error);
+      toast.error('快速测试过程出现异常');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -270,6 +306,22 @@ function App() {
               强制生成大纲
             </button>
             
+            <button
+              onClick={handleQuickTest}
+              className="flex items-center gap-2 px-3 py-2 text-blue-600 hover:text-blue-900 hover:bg-blue-100 rounded-lg transition-colors"
+              title="快速API测试"
+            >
+              <Zap className="w-4 h-4" />
+              快速测试
+            </button>
+            <button
+              onClick={handleE2ETest}
+              className="flex items-center gap-2 px-3 py-2 text-purple-600 hover:text-purple-900 hover:bg-purple-100 rounded-lg transition-colors"
+              title="端到端测试"
+            >
+              <TestTube className="w-4 h-4" />
+              完整测试
+            </button>
             <button
               onClick={() => setShowAPITester(true)}
               className="flex items-center gap-2 px-3 py-2 text-green-600 hover:text-green-900 hover:bg-green-100 rounded-lg transition-colors"
@@ -414,6 +466,7 @@ function App() {
                 onGenerateCover={() => generateCover('科技感', '公众号')}
                 onExport={exportArticle}
                 isProcessing={isProcessing}
+                images={appState.currentArticle.images}
               />
             </div>
 
@@ -425,6 +478,10 @@ function App() {
                 onRegenerateImage={handleRegenerateImage}
                 onDeleteImage={handleDeleteImage}
                 onGenerateCover={generateCover}
+                onGenerateImages={generateImages}
+                onGenerateTitles={generateTitles}
+                onSelectTitle={setSelectedTitle}
+                currentTitle={appState.currentArticle.title}
                 isGenerating={isProcessing}
               />
             </div>

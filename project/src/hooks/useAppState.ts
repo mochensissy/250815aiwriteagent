@@ -24,7 +24,8 @@ import {
   callPerplexityAPI,
   generateImagePrompts,
   generateImage,
-  callOpenRouterAPI
+  callOpenRouterAPI,
+  generateArticleTitles
 } from '../utils/api';
 import toast from 'react-hot-toast';
 
@@ -641,7 +642,42 @@ ${appState.currentArticle.outline.map(node => {
     setIsProcessing(true);
     
     try {
-      const prompt = `为文章"${appState.currentArticle.title}"生成${style}风格的${platform}封面图，尺寸适配${platform}平台要求`;
+      // 根据平台生成适配的尺寸信息
+      const platformSpecs = {
+        '公众号': { ratio: '16:9', description: '微信公众号封面，横版布局' },
+        '小红书': { ratio: '3:4', description: '小红书封面，竖版布局' },
+        '知乎': { ratio: '16:9', description: '知乎文章封面，横版布局' },
+        '头条': { ratio: '16:9', description: '今日头条封面，横版布局' }
+      };
+      
+      const spec = platformSpecs[platform as keyof typeof platformSpecs] || platformSpecs['公众号'];
+      
+      // 根据文章内容生成更详细的封面描述
+      const articlePreview = appState.currentArticle.content.substring(0, 200);
+      
+      // 检查并优化标题
+      const articleTitle = appState.currentArticle.title === '新文章' ? 
+        (appState.currentArticle.content.split('\n')[0]?.replace(/^#+\s*/, '') || '文章标题') : 
+        appState.currentArticle.title;
+      
+      const prompt = `
+作为专业的视觉设计师，请为以下文章生成${platform}平台的封面图：
+
+文章标题：${articleTitle}
+文章内容预览：${articlePreview}...
+
+设计要求：
+- 风格：${style}风格
+- 平台：${spec.description}
+- 比例：${spec.ratio}
+- 设计风格：现代简约，视觉冲击力强
+- 色彩：和谐统一，适合${platform}平台调性
+- 标题位置：将"${articleTitle}"文字放在图片下方区域，字体清晰，易于阅读
+- 构图：主视觉在上方，标题文字在下方，层次分明
+- 无水印：不要添加任何AI标识或水印
+
+具体描述：${style}风格的${platform}封面设计，${spec.ratio}比例，主视觉体现文章"${articleTitle}"的主题内容，标题文字"${articleTitle}"清晰显示在画面下方，色彩丰富专业，现代简约设计，适合${platform}平台展示，高质量摄影作品效果
+`;
       const imageUrl = await generateImage(prompt);
       
       const coverImage: GeneratedImage = {
@@ -900,6 +936,75 @@ ${appState.currentArticle.outline.map(node => {
     }, 100);
   }, [appState.knowledgeBase]);
 
+  // 生成文章标题选项
+  const generateTitles = async () => {
+    if (!appState.currentArticle) {
+      toast.error('请先生成文章内容');
+      return [];
+    }
+    
+    setIsProcessing(true);
+    
+    try {
+      console.log('📝 开始生成标题选项...');
+      const titles = await generateArticleTitles(
+        appState.currentArticle.content,
+        appState.currentArticle.outline
+      );
+      
+      console.log('✅ 标题生成成功:', titles);
+      toast.success(`生成了${titles.length}个标题选项`);
+      return titles;
+      
+    } catch (error) {
+      console.error('❌ 标题生成失败:', error);
+      toast.error('标题生成失败，请重试');
+      return [];
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // 设置选中的标题并自动插入到文章开头
+  const setSelectedTitle = (title: string) => {
+    if (!appState.currentArticle) return;
+    
+    let updatedContent = appState.currentArticle.content;
+    
+    // 自动将标题插入到文章开头
+    if (updatedContent) {
+      // 检查文章开头是否已经有标题格式
+      const lines = updatedContent.split('\n');
+      const firstLine = lines[0];
+      
+      // 如果第一行是以 # 开头的标题，替换它
+      if (firstLine.startsWith('#')) {
+        lines[0] = `# ${title}`;
+        updatedContent = lines.join('\n');
+        console.log('📝 替换了现有标题');
+      } 
+      // 否则在文章开头插入新标题
+      else {
+        updatedContent = `# ${title}\n\n${updatedContent}`;
+        console.log('📝 在文章开头插入新标题');
+      }
+    } else {
+      // 如果文章内容为空，只设置标题
+      updatedContent = `# ${title}\n\n`;
+    }
+    
+    setAppState(prev => ({
+      ...prev,
+      currentArticle: prev.currentArticle ? {
+        ...prev.currentArticle,
+        title,
+        content: updatedContent
+      } : undefined
+    }));
+    
+    toast.success(`标题已更新并插入到文章开头：${title}`);
+  };
+
   return {
     appState,
     isProcessing,
@@ -922,6 +1027,8 @@ ${appState.currentArticle.outline.map(node => {
     deleteImage,
     updateOutline,
     updateContent,
+    generateTitles,
+    setSelectedTitle,
     exportArticle,
     updateAPIConfig,
     setAppState

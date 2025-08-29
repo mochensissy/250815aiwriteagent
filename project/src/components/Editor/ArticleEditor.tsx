@@ -10,6 +10,7 @@ import { MessageCircle, Image, Download, Wand2, MoreHorizontal, Copy, Eye, Edit3
 import { EditSuggestion } from '../../types';
 import ReactMarkdown from 'react-markdown';
 import toast from 'react-hot-toast';
+import { copyToClipboard, downloadTextFile } from '../../utils/userExperience';
 
 interface ArticleEditorProps {
   content: string;
@@ -19,6 +20,7 @@ interface ArticleEditorProps {
   onGenerateCover: () => void;
   onExport: () => void;
   isProcessing: boolean;
+  images?: Array<{ id: string; url: string; prompt: string; position?: number }>; // 新增：可用的图片列表
 }
 
 const ArticleEditor: React.FC<ArticleEditorProps> = ({
@@ -28,7 +30,8 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({
   onGenerateImages,
   onGenerateCover,
   onExport,
-  isProcessing
+  isProcessing,
+  images = []
 }) => {
   const [selectedText, setSelectedText] = useState('');
   const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number } | null>(null);
@@ -37,9 +40,264 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({
   const [chatMessage, setChatMessage] = useState('');
   const [chatHistory, setChatHistory] = useState<Array<{ type: 'user' | 'system'; message: string }>>([]);
   const [viewMode, setViewMode] = useState<'edit' | 'split'>('edit');
+  const [showImagePicker, setShowImagePicker] = useState(false);
+  
+  // 字数统计函数
+  const getWordCount = (text: string): { characters: number; charactersNoSpaces: number; words: number } => {
+    const characters = text.length;
+    const charactersNoSpaces = text.replace(/\s/g, '').length;
+    const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+    return { characters, charactersNoSpaces, words };
+  };
+  
+  const wordStats = getWordCount(content);
+  
+  // 通用关键词提取系统
+  const extractKeywords = (imageDescription: string): string[] => {
+    const keywords: string[] = [];
+    const cleanText = imageDescription.toLowerCase().replace(/[^\u4e00-\u9fa5a-zA-Z\s]/g, '');
+    
+    // 使用正则提取所有有意义的中文词汇
+    const chineseWords = cleanText.match(/[\u4e00-\u9fa5]{2,6}/g) || [];
+    
+    // 过滤停用词和无意义词汇
+    const stopWords = new Set([
+      '的', '了', '在', '和', '是', '有', '就', '都', '会', '说', '到', '还', '也', '可以', 
+      '这个', '那个', '什么', '怎么', '为什么', '如果', '因为', '所以', '但是', '然后',
+      '非常', '很多', '一些', '一个', '这样', '那样', '现在', '当时', '后来', '开始',
+      '结束', '已经', '正在', '应该', '可能', '或者', '而且', '不过', '只是', '真的'
+    ]);
+    
+    // 筛选有效关键词
+    chineseWords.forEach(word => {
+      if (word.length >= 2 && 
+          word.length <= 6 && 
+          !stopWords.has(word) &&
+          keywords.length < 10) {
+        keywords.push(word);
+      }
+    });
+    
+    // 提取英文关键词（如有）
+    const englishWords = imageDescription.match(/[a-zA-Z]{3,}/g) || [];
+    englishWords.forEach(word => {
+      if (word.length >= 3 && keywords.length < 15) {
+        keywords.push(word.toLowerCase());
+      }
+    });
+    
+    console.log(`🔍 从图片描述"${imageDescription.substring(0, 50)}..."中提取关键词:`, [...new Set(keywords)]);
+    
+    return [...new Set(keywords)];
+  };
+  
+  // 通用相关性计算算法
+  const calculateRelevance = (paragraph: string, imageKeywords: string[]): number => {
+    if (imageKeywords.length === 0) return 0;
+    
+    const paragraphLower = paragraph.toLowerCase();
+    let matchCount = 0;
+    let totalMatches = 0;
+    
+    // 统计匹配的关键词数量
+    imageKeywords.forEach(keyword => {
+      if (paragraphLower.includes(keyword.toLowerCase())) {
+        matchCount++;
+        // 计算关键词在段落中出现的次数
+        const regex = new RegExp(keyword.toLowerCase(), 'g');
+        const occurrences = (paragraphLower.match(regex) || []).length;
+        totalMatches += occurrences;
+      }
+    });
+    
+    // 基础相关性得分 (0-1)
+    const basicRelevance = imageKeywords.length > 0 ? matchCount / imageKeywords.length : 0;
+    
+    // 匹配密度加分
+    const densityBonus = totalMatches > matchCount ? 0.1 : 0;
+    
+    // 段落长度评分（适中长度更适合插图）
+    const length = paragraph.length;
+    let lengthScore = 0;
+    if (length >= 60 && length <= 200) {
+      lengthScore = 0.2; // 最佳长度
+    } else if (length >= 200 && length <= 350) {
+      lengthScore = 0.15; // 良好长度
+    } else if (length >= 350 && length <= 500) {
+      lengthScore = 0.1; // 可接受长度
+    } else if (length < 60) {
+      lengthScore = 0.05; // 太短
+    }
+    
+    // 位置评分（避免在文章最开头插入）
+    let positionScore = 0;
+    const articleStart = content.substring(0, 150);
+    if (!articleStart.includes(paragraph.substring(0, 30))) {
+      positionScore = 0.1;
+    }
+    
+    const finalScore = basicRelevance + densityBonus + lengthScore + positionScore;
+    
+    console.log(`📊 段落相关性评分:`, {
+      paragraph: paragraph.substring(0, 30) + '...',
+      matchCount,
+      basicRelevance: basicRelevance.toFixed(2),
+      lengthScore: lengthScore.toFixed(2),
+      positionScore: positionScore.toFixed(2),
+      finalScore: finalScore.toFixed(2)
+    });
+    
+    return finalScore;
+  };
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
+
+  // 分布式图片插入系统
+  const insertImage = (imageUrl: string, altText: string) => {
+    console.log('🖼️ 开始插入图片:', { imageUrl, altText });
+    
+    if (!onChange) {
+      console.error('❌ onChange 函数不存在');
+      toast.error('编辑器初始化失败');
+      return;
+    }
+    
+    // 智能插入图片到合适位置
+    const imageMarkdown = `\n\n![${altText}](${imageUrl})\n\n`;
+    
+    // 获取当前内容并检查已有图片
+    const currentContent = content;
+    const existingImages = (currentContent.match(/!\[.*?\]\(.*?\)/g) || []).length;
+    console.log(`📊 当前已有图片数量: ${existingImages}`);
+    
+    // 分析文章结构，分段处理
+    const paragraphs = currentContent.split('\n\n').filter(p => p.trim().length > 20);
+    let insertPosition = currentContent.length; // 默认插入到末尾
+    
+    if (paragraphs.length > 2) {
+      // 根据已有图片数量，选择不同的插入策略
+      const strategy = existingImages % 3;
+      
+      switch (strategy) {
+        case 0: // 第一张图片：插入到前1/3位置
+          const firstThird = Math.floor(paragraphs.length / 3);
+          const targetIndex1 = Math.max(1, firstThird); // 至少跳过第一段
+          const targetParagraphs1 = paragraphs.slice(0, targetIndex1 + 1);
+          const targetText1 = targetParagraphs1.join('\n\n');
+          insertPosition = currentContent.indexOf(targetText1) + targetText1.length;
+          console.log(`📍 策略0: 插入到前1/3位置 (段落${targetIndex1 + 1}后)`);
+          break;
+          
+        case 1: // 第二张图片：插入到中间1/3位置
+          const middleThird = Math.floor(paragraphs.length * 2 / 3);
+          const targetIndex2 = Math.min(middleThird, paragraphs.length - 2);
+          const targetParagraphs2 = paragraphs.slice(0, targetIndex2 + 1);
+          const targetText2 = targetParagraphs2.join('\n\n');
+          insertPosition = currentContent.indexOf(targetText2) + targetText2.length;
+          console.log(`📍 策略1: 插入到中间1/3位置 (段落${targetIndex2 + 1}后)`);
+          break;
+          
+        case 2: // 第三张图片：插入到后1/3位置
+          const lastThird = Math.floor(paragraphs.length * 5 / 6);
+          const targetIndex3 = Math.min(lastThird, paragraphs.length - 1);
+          const targetParagraphs3 = paragraphs.slice(0, targetIndex3 + 1);
+          const targetText3 = targetParagraphs3.join('\n\n');
+          insertPosition = currentContent.indexOf(targetText3) + targetText3.length;
+          console.log(`📍 策略2: 插入到后1/3位置 (段落${targetIndex3 + 1}后)`);
+          break;
+      }
+      
+      // 二次优化：检查关键词相关性
+      const imageKeywords = extractKeywords(altText);
+      if (imageKeywords.length > 0) {
+        // 在选定区域附近寻找更相关的段落
+        const searchStart = Math.max(0, Math.floor(insertPosition / currentContent.length * paragraphs.length) - 1);
+        const searchEnd = Math.min(paragraphs.length, searchStart + 3);
+        
+        let bestMatch = 0;
+        let bestLocalPosition = insertPosition;
+        
+        for (let i = searchStart; i < searchEnd; i++) {
+          const paragraph = paragraphs[i];
+          const relevance = calculateRelevance(paragraph, imageKeywords);
+          
+          if (relevance > bestMatch && relevance > 0.15) {
+            bestMatch = relevance;
+            const beforeParagraphs = paragraphs.slice(0, i + 1);
+            const beforeText = beforeParagraphs.join('\n\n');
+            bestLocalPosition = currentContent.indexOf(beforeText) + beforeText.length;
+            console.log(`🎯 在附近找到更相关位置，相关性: ${relevance}`);
+          }
+        }
+        
+        if (bestMatch > 0.15) {
+          insertPosition = bestLocalPosition;
+        }
+      }
+    } else {
+      // 文章段落较少，简单分布
+      if (existingImages === 0 && paragraphs.length > 1) {
+        // 第一张图插入到第二段后
+        const firstParagraph = paragraphs[1];
+        const firstPosition = currentContent.indexOf(firstParagraph) + firstParagraph.length;
+        insertPosition = firstPosition;
+        console.log('📍 短文章策略: 插入到第二段后');
+      }
+    }
+    
+    // 插入图片
+    const newContent = currentContent.slice(0, insertPosition) + imageMarkdown + currentContent.slice(insertPosition);
+    
+    console.log('📝 插入详情:', {
+      '插入前长度': currentContent.length,
+      '插入后长度': newContent.length,
+      '插入位置': insertPosition,
+      '已有图片数': existingImages
+    });
+    
+    try {
+      onChange(newContent);
+      setShowImagePicker(false);
+      toast.success(`图片已分布式插入 (第${existingImages + 1}张)`);
+      
+      // 如果 textarea 存在，尝试聚焦
+      if (textareaRef.current) {
+        setTimeout(() => {
+          if (textareaRef.current) {
+            textareaRef.current.focus();
+            const textLength = newContent.length;
+            textareaRef.current.setSelectionRange(textLength, textLength);
+          }
+        }, 100);
+      }
+    } catch (error) {
+      console.error('❌ 插入图片时出错:', error);
+      toast.error('插入图片失败');
+    }
+  };
+
+  // 改进的导出功能
+  const handleExport = () => {
+    if (!content.trim()) {
+      toast.error('文章内容为空，无法导出');
+      return;
+    }
+
+    // 复制到剪贴板
+    copyToClipboard(content, '文章已复制到剪贴板');
+  };
+
+  // 下载为Markdown文件
+  const handleDownloadMarkdown = () => {
+    if (!content.trim()) {
+      toast.error('文章内容为空，无法下载');
+      return;
+    }
+
+    const filename = `article_${new Date().toISOString().slice(0, 10)}.md`;
+    downloadTextFile(content, filename, 'text/markdown');
+  };
 
   const editSuggestions: EditSuggestion[] = [
     { type: 'polish', label: '润色', icon: '✨', description: '优化语言表达，让文字更优美' },
@@ -271,6 +529,18 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({
             </div>
           </div>
 
+          {/* 字数统计 */}
+          <div className="flex items-center gap-3 text-sm text-gray-500 bg-gray-50 px-3 py-1.5 rounded-lg">
+            <span className="flex items-center gap-1">
+              <Type className="w-4 h-4" />
+              <span className="font-medium text-gray-700">{wordStats.charactersNoSpaces}</span>字
+            </span>
+            <span className="text-gray-300">|</span>
+            <span><span className="font-medium text-gray-700">{wordStats.words}</span>词</span>
+            <span className="text-gray-300">|</span>
+            <span><span className="font-medium text-gray-700">{wordStats.characters}</span>字符</span>
+          </div>
+
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowChat(!showChat)}
@@ -291,6 +561,15 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({
             >
               <Image className="w-4 h-4" />
             </button>
+            {images && images.length > 0 && (
+              <button
+                onClick={() => setShowImagePicker(true)}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                title="插入图片"
+              >
+                <Download className="w-4 h-4" />
+              </button>
+            )}
             <button
               onClick={onGenerateCover}
               disabled={isProcessing}
@@ -299,13 +578,33 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({
             >
               <Wand2 className="w-4 h-4" />
             </button>
-            <button
-              onClick={onExport}
-              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-              title="一键复制"
-            >
-              <Copy className="w-4 h-4" />
-            </button>
+            <div className="relative group">
+              <button
+                onClick={handleExport}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                title="导出文章"
+              >
+                <Copy className="w-4 h-4" />
+              </button>
+              
+              {/* 导出选项下拉菜单 */}
+              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 min-w-32">
+                <button
+                  onClick={handleExport}
+                  className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg flex items-center gap-2"
+                >
+                  <Copy className="w-3 h-3" />
+                  复制文本
+                </button>
+                <button
+                  onClick={handleDownloadMarkdown}
+                  className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 rounded-b-lg flex items-center gap-2"
+                >
+                  <Download className="w-3 h-3" />
+                  下载MD
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -484,6 +783,91 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({
           </div>
         )}
       </div>
+
+      {/* 图片选择器模态框 */}
+      {showImagePicker && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg w-96 max-h-96 overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">选择图片插入</h3>
+              <button
+                onClick={() => setShowImagePicker(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {!images || images.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <Image className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>还没有生成图片</p>
+                <p className="text-sm">请先生成配图</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {images.map((image) => (
+                  <div key={image.id} className="relative group cursor-pointer">
+                    <img
+                      src={image.url}
+                      alt={`配图 ${image.id}`}
+                      className="w-full h-24 object-cover rounded-lg border-2 border-transparent hover:border-blue-500 transition-colors"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('🖱️ 点击了图片:', image.id, image.url);
+                        insertImage(image.url, image.prompt || '配图');
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 transition-opacity rounded-lg flex items-center justify-center">
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Download className="w-6 h-6 text-white" />
+                      </div>
+                    </div>
+                    <div className="absolute bottom-1 left-1 right-1">
+                      <div className="bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded truncate">
+                        {image.prompt || '配图'}
+                      </div>
+                    </div>
+                    {/* 测试按钮 */}
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('🔘 点击了按钮:', image.id);
+                        insertImage(image.url, image.prompt || '配图');
+                      }}
+                      className="absolute top-1 right-1 bg-blue-600 text-white text-xs px-2 py-1 rounded hover:bg-blue-700"
+                    >
+                      插入
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            <div className="mt-4 pt-4 border-t border-gray-200 space-y-2">
+              {/* 调试测试按钮 */}
+              <button
+                onClick={() => {
+                  console.log('🧪 测试插入功能');
+                  insertImage('https://via.placeholder.com/400x300/4A90E2/FFFFFF?text=测试图片', '测试图片');
+                }}
+                className="w-full py-2 px-4 bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors text-sm"
+              >
+                🧪 测试插入（调试用）
+              </button>
+              
+              <button
+                onClick={() => setShowImagePicker(false)}
+                className="w-full py-2 px-4 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
