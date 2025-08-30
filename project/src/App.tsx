@@ -16,6 +16,7 @@ import ArticleEditor from './components/Editor/ArticleEditor';
 import ImageManager from './components/Images/ImageManager';
 import APIManager from './components/Settings/APIManager';
 import APITester from './components/Testing/APITester';
+import StyleSummary from './components/Common/StyleSummary';
 import { useAppState } from './hooks/useAppState';
 import { generateOutline } from './utils/api';
 import { KnowledgeBaseArticle, StylePrototype } from './types';
@@ -151,7 +152,8 @@ function App() {
   // 处理大纲生成完成
   const handleOutlineGenerate = async () => {
     console.log('开始生成文章...');
-    await generateArticle();
+    // 传递选中的原型数据给文章生成函数
+    await generateArticle(appState.selectedPrototypes);
     setCurrentView('editor');
   };
 
@@ -413,6 +415,16 @@ function App() {
                 <p className="text-gray-600">
                   AI已为您生成初始大纲，您可以调整结构后生成完整文章
                 </p>
+                
+                {/* 风格摘要显示 */}
+                <div className="mt-6">
+                  <StyleSummary
+                    selectedPrototypes={appState.selectedPrototypes}
+                    knowledgeBase={appState.knowledgeBase}
+                    showDetails={true}
+                    className="max-w-2xl"
+                  />
+                </div>
               </div>
               
               <OutlineEditor

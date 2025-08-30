@@ -122,5 +122,6 @@ export interface AppState {
   termMappings: TermMapping[];
   writingRules: WritingRule[];
   selectedPrototype?: StylePrototype;
+  selectedPrototypes?: StylePrototype[]; // 新增：选中的多个风格原型
   apiConfig: APIConfig;
 }

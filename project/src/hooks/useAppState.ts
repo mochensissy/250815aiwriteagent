@@ -137,6 +137,8 @@ export const useAppState = () => {
                 saveKnowledgeBase(updatedKnowledgeBaseWithStyle);
                 
                 console.log('🎨 风格要素已更新到状态');
+                toast.success(`已分析出 ${styleElements.length} 个风格要素，请到"风格设置"页面确认`);
+                
                 
                 // 查找与新文章相似的现有文章
                 const existingMemoryArticles = updatedKnowledgeBase.filter(a => 
@@ -158,7 +160,8 @@ export const useAppState = () => {
               }
             } catch (styleError) {
               console.error('风格分析失败:', styleError);
-              // 不影响主流程，静默处理
+              // 给用户友好的提示
+              toast.error('风格分析失败，请检查API配置。您仍可以手动添加风格要素。');
             }
           }, 1000);
         }
@@ -304,6 +307,12 @@ export const useAppState = () => {
         
         styleContext = selectedStyleElements.join('; ');
         console.log('🎨 选定的风格上下文:', styleContext);
+        
+        // 保存选中的原型到应用状态，供后续文章生成使用
+        setAppState(prev => ({
+          ...prev,
+          selectedPrototypes: selectedPrototypes
+        }));
       } else {
         // 如果没有选定原型，使用所有确认的风格要素
         const allStyleElements = appState.knowledgeBase
@@ -316,8 +325,12 @@ export const useAppState = () => {
         console.log('🎨 使用通用风格上下文:', styleContext);
       }
       
-      // 使用新的大纲生成函数
-      await generateOutlineFromDraft(appState.currentArticle.draft, styleContext || '通用写作风格');
+      // 使用新的大纲生成函数，传递选中的原型
+      await generateOutlineFromDraft(
+        appState.currentArticle.draft, 
+        styleContext || '通用写作风格',
+        selectedPrototypes
+      );
       
     } catch (error) {
       console.error('大纲生成失败:', error);
@@ -354,16 +367,26 @@ export const useAppState = () => {
   };
 
   // 生成大纲（独立函数）
-  const generateOutlineFromDraft = async (draft: string, styleContext?: string) => {
+  const generateOutlineFromDraft = async (
+    draft: string, 
+    styleContext?: string, 
+    selectedPrototypes?: StylePrototype[]
+  ) => {
     setIsProcessing(true);
     
     try {
       console.log('🤖 调用AI生成个性化大纲...');
       console.log('📝 传入草稿内容（前200字符）:', draft.substring(0, 200) + '...');
       console.log('🎨 传入风格上下文:', styleContext || '通用写作风格');
+      console.log('🎯 选中的风格原型数量:', selectedPrototypes?.length || 0);
       
       const { generateOutline } = await import('../utils/api');
-      const aiOutline = await generateOutline(draft, styleContext || '通用写作风格');
+      const aiOutline = await generateOutline(
+        draft, 
+        styleContext || '通用写作风格',
+        selectedPrototypes,
+        appState.knowledgeBase
+      );
       
       console.log('🔍 AI返回的原始结果:', aiOutline);
       
@@ -466,7 +489,7 @@ ${appState.currentArticle.content}
   };
 
   // 生成完整文章
-  const generateArticle = async () => {
+  const generateArticle = async (selectedPrototypes?: StylePrototype[]) => {
     if (!appState.currentArticle) return;
 
     setIsProcessing(true);
@@ -475,6 +498,7 @@ ${appState.currentArticle.content}
       console.log('🚀 开始生成文章');
       console.log('📋 大纲节点数量:', appState.currentArticle.outline.length);
       console.log('📝 草稿长度:', appState.currentArticle.draft.length);
+      console.log('🎯 选中的风格原型数量:', selectedPrototypes?.length || 0);
       
       // 获取风格上下文（从所有记忆库文章的风格要素中）
       const allStyleElements = appState.knowledgeBase
@@ -493,7 +517,10 @@ ${appState.currentArticle.content}
         fullContent = await generateFullArticle(
           appState.currentArticle.outline,
           appState.currentArticle.draft,
-          styleContext || '通用写作风格'
+          styleContext || '通用写作风格',
+          undefined, // externalInsights
+          selectedPrototypes,
+          appState.knowledgeBase
         );
         console.log('✅ AI文章生成完成，长度:', fullContent.length);
       } catch (aiError) {
@@ -652,8 +679,9 @@ ${appState.currentArticle.outline.map(node => {
       
       const spec = platformSpecs[platform as keyof typeof platformSpecs] || platformSpecs['公众号'];
       
-      // 根据文章内容生成更详细的封面描述
-      const articlePreview = appState.currentArticle.content.substring(0, 200);
+      // 使用AI分析完整文章内容
+      const { analyzeContentWithAI } = await import('../utils/api');
+      const contentAnalysis = await analyzeContentWithAI(appState.currentArticle.content);
       
       // 检查并优化标题
       const articleTitle = appState.currentArticle.title === '新文章' ? 
@@ -661,22 +689,48 @@ ${appState.currentArticle.outline.map(node => {
         appState.currentArticle.title;
       
       const prompt = `
-作为专业的视觉设计师，请为以下文章生成${platform}平台的封面图：
+作为专业的封面设计师，请为以下文章生成${platform}平台的封面图：
 
-文章标题：${articleTitle}
-文章内容预览：${articlePreview}...
+【文章信息】：
+- 标题：${articleTitle}
+- 主要主题：${contentAnalysis.mainTheme}
+- 情感色调：${contentAnalysis.emotionalTone}
+- 场景类型：${contentAnalysis.sceneType}
 
-设计要求：
-- 风格：${style}风格
-- 平台：${spec.description}
-- 比例：${spec.ratio}
-- 设计风格：现代简约，视觉冲击力强
-- 色彩：和谐统一，适合${platform}平台调性
-- 标题位置：将"${articleTitle}"文字放在图片下方区域，字体清晰，易于阅读
-- 构图：主视觉在上方，标题文字在下方，层次分明
-- 无水印：不要添加任何AI标识或水印
+【完整文章内容】：
+${appState.currentArticle.content}
 
-具体描述：${style}风格的${platform}封面设计，${spec.ratio}比例，主视觉体现文章"${articleTitle}"的主题内容，标题文字"${articleTitle}"清晰显示在画面下方，色彩丰富专业，现代简约设计，适合${platform}平台展示，高质量摄影作品效果
+【封面设计原则】：
+
+1. **主题一致性**：
+   - 封面必须准确体现文章的核心主题："${contentAnalysis.mainTheme}"
+   - 传达文章的整体情感氛围："${contentAnalysis.emotionalTone}"
+   - 与文章内容形成呼应，而非独立的装饰
+
+2. **平台适配性**：
+   - 风格：${style}风格
+   - 平台：${spec.description}
+   - 比例：${spec.ratio}
+   - 符合${platform}平台的视觉规范和用户习惯
+
+3. **视觉层次**：
+   - 主视觉区域：体现文章核心主题和情感
+   - 标题区域：清晰展示"${articleTitle}"
+   - 整体构图：简洁有力，突出重点
+
+4. **设计质量**：
+   - 现代简约的设计风格
+   - 色彩和谐，与文章情感色调匹配
+   - 专业的视觉效果，适合${platform}平台展示
+   - 无任何水印或AI标识
+
+【具体要求】：
+请生成一个${style}风格的${platform}封面设计，${spec.ratio}比例。封面应该：
+- 准确传达文章"${articleTitle}"的核心主题和情感
+- 基于完整文章内容理解，而非仅仅标题
+- 营造与文章内容相符的视觉氛围
+- 使用专业的构图和色彩搭配
+- 确保标题文字清晰可读，与视觉设计和谐统一
 `;
       const imageUrl = await generateImage(prompt);
       

@@ -156,3 +156,4 @@ if (typeof window === 'undefined') {
   // 浏览器环境直接运行
   runTests();
 }
+

@@ -687,6 +687,7 @@ ${referenceArticles.map((article, index) => `${index + 1}. ID: ${article.id}
           articleId: item.articleId,
           similarity: Math.min(100, Math.max(0, parseInt(item.similarity) || 75))
         }))
+        .sort((a, b) => b.similarity - a.similarity) // 按匹配度从高到低排序
         .slice(0, 3); // 最多3个推荐
       
       console.log('🎯 有效推荐数量:', validPrototypes.length);
@@ -724,12 +725,27 @@ ${referenceArticles.map((article, index) => `${index + 1}. ID: ${article.id}
 /**
  * 生成文章大纲
  */
-export const generateOutline = async (draft: string, styleContext: string): Promise<any[]> => {
+export const generateOutline = async (
+  draft: string, 
+  styleContext: string,
+  selectedPrototypes?: any[],
+  knowledgeBase?: any[]
+): Promise<any[]> => {
   console.log('🎯 开始生成微信公众号风格大纲...');
   console.log('📝 草稿内容预览:', draft.substring(0, 100) + '...');
   console.log('🎨 风格上下文:', styleContext);
 
-  const prompt = `
+  // 导入动态提示词生成器
+  const { generateStyleBasedPrompt } = await import('./promptGenerator');
+  
+  // 生成基于风格的动态提示词
+  let dynamicPrompt = '';
+  if (selectedPrototypes && knowledgeBase && selectedPrototypes.length > 0) {
+    console.log('🎨 使用动态风格提示词生成大纲...');
+    dynamicPrompt = await generateStyleBasedPrompt(draft, selectedPrototypes, knowledgeBase);
+  } else {
+    console.log('📋 使用基础提示词生成大纲...');
+    dynamicPrompt = `
 你是一位专业的微信公众号编辑，擅长将用户的真实经历和想法整理成自然、口语化的文章结构。
 
 **用户原始内容（类似录音整理）：**
@@ -738,7 +754,10 @@ ${draft}
 ---
 
 **个人写作风格参考：**
-${styleContext || '保持自然、真实、接地气的表达方式'}
+${styleContext || '保持自然、真实、接地气的表达方式'}`;
+  }
+
+  const prompt = `${dynamicPrompt}
 
 **任务要求：**
 
@@ -904,9 +923,22 @@ export const generateFullArticle = async (
   outline: any[],
   draft: string,
   styleContext: string,
-  externalInsights?: string
+  externalInsights?: string,
+  selectedPrototypes?: any[],
+  knowledgeBase?: any[]
 ): Promise<string> => {
-  const prompt = `
+  
+  // 导入动态提示词生成器
+  const { generateStyleBasedPrompt } = await import('./promptGenerator');
+  
+  // 生成基于风格的动态提示词
+  let dynamicPrompt = '';
+  if (selectedPrototypes && knowledgeBase && selectedPrototypes.length > 0) {
+    console.log('🎨 使用动态风格提示词生成完整文章...');
+    dynamicPrompt = await generateStyleBasedPrompt(draft, selectedPrototypes, knowledgeBase);
+  } else {
+    console.log('📋 使用基础提示词生成完整文章...');
+    dynamicPrompt = `
 ## 定位
 你是一位专业的内容转换专家，专注于将口语化的录音文字整理为适合微信公众号发表的优质文章。
 
@@ -920,18 +952,18 @@ export const generateFullArticle = async (
 2. 具备中文写作能力，能够调整文章结构以适应平台要求。
 3. 了解如何通过简洁明了的语言吸引读者关注。
 
+**个人写作风格参考：**
+${styleContext || '保持自然、真实、接地气的表达方式'}`;
+  }
+
+  const prompt = `${dynamicPrompt}
+
 ---
 
 现在请基于以下素材生成一篇微信公众号文章：
 
-**原始内容（类似录音整理）：**
-${draft}
-
 **文章结构大纲：**
 ${outline.map(node => `${node.level === 1 ? '# ' : '## '}${node.title}`).join('\n')}
-
-**个人写作风格参考：**
-${styleContext || '保持自然、真实、接地气的表达方式'}
 
 ${externalInsights ? `**补充信息：**\n${externalInsights}\n` : ''}
 
@@ -1282,42 +1314,73 @@ const getImageExamplesByTheme = (theme: string): string => {
 /**
  * 通用内容分析系统 - 使用AI深度理解文章内容
  */
-const analyzeContentWithAI = async (content: string): Promise<{
+export const analyzeContentWithAI = async (content: string): Promise<{
   mainTheme: string;
   keyElements: string[];
   sceneType: string;
   emotionalTone: string;
   visualKeywords: string[];
+  imageStyle?: string;
+  colorTone?: string;
 }> => {
   const prompt = `
-请分析以下文章内容，提取关键信息用于生成相关配图：
+作为专业的内容分析师，请深度分析以下文章，为配图生成提供准确的指导信息：
 
-文章内容：
+【完整文章内容】：
 ${content}
 
-请分析并返回JSON格式的结果：
+【分析任务】：
+请从配图设计的角度分析文章，重点关注：
+
+1. **核心主题识别**：文章要传达的核心信息和价值观
+2. **情感基调分析**：文章的整体情感氛围和读者感受
+3. **场景环境理解**：文章涉及的主要环境和背景
+4. **视觉元素提取**：适合用于配图的具体视觉元素
+5. **意境营造方向**：配图应该营造的整体意境
+
+【输出要求】：
+请返回JSON格式的分析结果：
 {
-  "mainTheme": "文章的主要主题（如：生活感悟、旅行见闻、工作体验、美食探索、人际关系等）",
-  "keyElements": ["文章中提到的具体事物、人物、场景等关键元素，最多8个"],
-  "sceneType": "文章描述的主要场景类型（如：室内、户外、城市、自然、办公、家庭等）",
-  "emotionalTone": "文章的整体情感色调（如：温暖、思考、怀念、欢快、平静、励志等）",
-  "visualKeywords": ["适合用于配图的视觉关键词，最多6个"]
+  "mainTheme": "文章核心主题的准确描述",
+  "emotionalTone": "文章的主要情感基调",
+  "sceneType": "文章主要涉及的场景环境",
+  "keyElements": ["与主题直接相关的关键元素，最多5个"],
+  "visualKeywords": ["适合配图的视觉关键词，最多6个"],
+  "imageStyle": "推荐的配图风格（如：温馨生活、都市情感、自然意境等）",
+  "colorTone": "推荐的色彩基调（如：暖色调、冷色调、自然色等）"
 }
 
-要求：
-1. 分析要客观准确，基于文章实际内容
-2. keyElements要包含文章中明确提到的具体事物
-3. visualKeywords要适合用于图像生成，避免抽象概念
-4. 返回纯JSON格式，不要其他文字
+【重要提醒】：
+- 分析要基于文章的整体内容和情感，而非局部细节
+- keyElements应该是能够代表文章核心主题的元素
+- visualKeywords要避免过于具体的物品，重点是意境和氛围
+- 确保所有元素都与文章主题高度相关
+- 返回纯JSON格式，不要任何额外文字
 `;
 
   try {
+    console.log('🔍 开始AI内容分析...');
     const result = await callOpenRouterAPI(prompt);
+    console.log('📄 AI分析原始结果:', result);
+    
     const analysis = JSON.parse(result);
     console.log('🧠 AI内容分析结果:', analysis);
-    return analysis;
+    
+    // 确保返回的对象包含所有必需字段
+    const completeAnalysis = {
+      mainTheme: analysis.mainTheme || '生活感悟',
+      emotionalTone: analysis.emotionalTone || '温暖',
+      sceneType: analysis.sceneType || '生活场景',
+      keyElements: analysis.keyElements || [],
+      visualKeywords: analysis.visualKeywords || [],
+      imageStyle: analysis.imageStyle || '现代简约',
+      colorTone: analysis.colorTone || '和谐自然'
+    };
+    
+    return completeAnalysis;
   } catch (error) {
-    console.log('⚠️ AI分析失败，使用本地分析:', error);
+    console.error('❌ AI分析失败:', error);
+    console.log('🔄 使用本地分析作为备选...');
     return analyzeContentLocally(content);
   }
 };
@@ -1331,6 +1394,8 @@ const analyzeContentLocally = (content: string): {
   sceneType: string;
   emotionalTone: string;
   visualKeywords: string[];
+  imageStyle: string;
+  colorTone: string;
 } => {
   const text = content.toLowerCase();
   
@@ -1374,7 +1439,9 @@ const analyzeContentLocally = (content: string): {
     keyElements: [...new Set(keyElements)].slice(0, 8),
     sceneType,
     emotionalTone,
-    visualKeywords: [...new Set(keyElements)].slice(0, 6)
+    visualKeywords: [...new Set(keyElements)].slice(0, 6),
+    imageStyle: '现代简约',
+    colorTone: '和谐自然'
   };
 };
 
@@ -1388,41 +1455,56 @@ export const generateImagePrompts = async (content: string): Promise<string[]> =
   const contentAnalysis = await analyzeContentWithAI(content);
   console.log('🧠 内容分析完成:', contentAnalysis);
   
-  // 构建通用的配图生成提示
+  // 构建更智能的配图生成提示
   const imagePrompt = `
-你是专业的配图设计师，请基于以下文章分析结果，生成3个高质量的配图描述。
+你是专业的文章配图设计师，请基于深度内容分析为文章生成高度相关的配图。
 
-【文章内容摘要】：
-${content.substring(0, 500)}${content.length > 500 ? '...' : ''}
+【文章核心信息】：
+- 核心主题：${contentAnalysis.mainTheme}
+- 情感基调：${contentAnalysis.emotionalTone}
+- 场景环境：${contentAnalysis.sceneType}
+- 推荐风格：${contentAnalysis.imageStyle || '现代简约'}
+- 色彩基调：${contentAnalysis.colorTone || '和谐自然'}
+- 关键元素：${contentAnalysis.keyElements.join('、')}
 
-【内容分析结果】：
-- 主要主题：${contentAnalysis.mainTheme}
-- 关键元素：${contentAnalysis.keyElements.join(', ')}
-- 场景类型：${contentAnalysis.sceneType}
-- 情感色调：${contentAnalysis.emotionalTone}
-- 视觉关键词：${contentAnalysis.visualKeywords.join(', ')}
+【完整文章内容】：
+${content}
 
-【配图要求】：
-1. **主题匹配**：配图要体现"${contentAnalysis.mainTheme}"主题
-2. **元素融入**：合理融入关键元素：${contentAnalysis.keyElements.slice(0, 3).join('、')}
-3. **场景适配**：体现"${contentAnalysis.sceneType}"的环境特征
-4. **情感表达**：传达"${contentAnalysis.emotionalTone}"的情感氛围
-5. **视觉美感**：使用专业摄影构图，色彩和谐，画面简洁
+【配图设计要求】：
 
-【风格要求】：
-- 适合文章插图的专业摄影风格
-- 色调与情感色调匹配
-- 构图简洁，主题突出
-- 避免过于复杂的元素
-- 符合现代审美
+**核心原则**：
+1. 配图必须准确反映文章的核心主题："${contentAnalysis.mainTheme}"
+2. 传达文章的情感基调："${contentAnalysis.emotionalTone}"
+3. 营造与文章内容高度吻合的视觉意境
+4. 避免任何与文章主题无关的元素
 
-请生成3个不同角度的配图描述，返回JSON格式：
-["配图描述1", "配图描述2", "配图描述3"]
+**视觉风格**：
+- 整体风格：${contentAnalysis.imageStyle || '现代简约风格'}
+- 色彩运用：${contentAnalysis.colorTone || '和谐自然的色彩'}
+- 构图方式：简洁有力，突出主题
+- 质感要求：专业摄影级别的视觉效果
 
-每个描述要：
-- 基于内容分析结果
-- 适合作为文章配图
-- 具体可执行的视觉描述
+**内容匹配**：
+- 基于完整文章内容理解，而非表面关键词
+- 体现文章的深层含义和情感价值
+- 与文章的叙事节奏和情感起伏相呼应
+- 确保读者看到配图能联想到文章内容
+
+**技术要求**：
+- 生成3个配图：开篇引入图、核心内容图、总结升华图
+- 每个配图都要与对应段落的内容和情感匹配
+- 所有配图保持统一的视觉风格和色彩基调
+- 避免过于具体的物品，重点营造意境和氛围
+
+请生成3个配图描述，返回JSON格式：
+["开篇配图描述", "核心配图描述", "总结配图描述"]
+
+每个描述必须：
+- 准确体现对应部分的文章内容和情感
+- 与文章主题"${contentAnalysis.mainTheme}"高度相关
+- 营造"${contentAnalysis.emotionalTone}"的情感氛围
+- 使用"${contentAnalysis.imageStyle || '现代简约'}"的视觉风格
+- 采用"${contentAnalysis.colorTone || '和谐自然'}"的色彩基调
 `;
 
   try {
