@@ -11,11 +11,12 @@ import { monitorApiCall } from './performance';
 /**
  * 调用Google Gemini API进行文本生成
  * 包含网络问题的智能处理和降级策略
+ * 作为OpenRouter的备用方案
  */
 export const callGeminiAPI = async (prompt: string): Promise<string> => {
   return monitorApiCall(async () => {
     const config = getAPIConfig();
-    console.log('🚀 调用Gemini API');
+    console.log('🚀 调用Gemini API (备用)');
     console.log('📝 Prompt长度:', prompt.length);
     console.log('📝 Prompt预览:', prompt.substring(0, 200) + '...');
     
@@ -204,9 +205,9 @@ export const callPerplexityAPI = async (query: string): Promise<string> => {
     console.log('🔍 调用Perplexity API');
     console.log('📝 查询内容:', query);
     
-    // 设置较短的超时时间，快速检测网络问题
+    // 设置更短的超时时间，快速检测网络问题（5秒）
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
     
     const response = await fetch(config.perplexity.endpoint, {
       method: 'POST',
@@ -553,12 +554,14 @@ export const recommendStylePrototypes = async (draft: string, referenceArticles:
   console.log('📝 草稿长度:', draft.length);
   console.log('📚 参考文章数量:', referenceArticles.length);
   
-  // 检查API配置
+  // 检查API配置 - 优先OpenRouter，备用Gemini
   const apiConfig = getAPIConfig();
-  console.log('⚙️ API配置检查:', apiConfig.gemini.apiKey ? 'API已配置' : 'API未配置');
+  const hasOpenRouter = !!apiConfig.openrouter.apiKey;
+  const hasGemini = !!apiConfig.gemini.apiKey;
+  console.log('⚙️ API配置检查:', hasOpenRouter ? 'OpenRouter已配置' : hasGemini ? 'Gemini备用可用' : 'API未配置');
   
-  if (!apiConfig.gemini.apiKey) {
-    console.warn('⚠️ 没有找到Gemini API配置，跳过推荐');
+  if (!hasOpenRouter && !hasGemini) {
+    console.warn('⚠️ 没有找到可用的API配置，跳过推荐');
     return [];
   }
 

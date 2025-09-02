@@ -478,7 +478,7 @@ ${appState.currentArticle.content}
 请以JSON数组格式返回5个标题选项。
 `;
 
-      const result = await callGeminiAPI(prompt);
+      const result = await callOpenRouterAPI(prompt);
       return JSON.parse(result);
     } catch (error) {
       console.error('标题生成失败:', error);

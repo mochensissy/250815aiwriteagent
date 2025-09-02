@@ -5,7 +5,7 @@
  * 用于开发阶段快速验证功能完整性
  */
 
-import { callGeminiAPI, generateOutline, generateFullArticle, generateImage } from './api';
+import { callOpenRouterAPI, generateOutline, generateFullArticle, generateImage } from './api';
 import { getAPIConfig } from './storage';
 
 /**
@@ -48,6 +48,7 @@ export const runQuickTest = async (): Promise<QuickTestResult[]> => {
   let stepStartTime = Date.now();
   try {
     const config = getAPIConfig();
+    const hasOpenRouter = !!config.openrouter.apiKey;
     const hasGemini = !!config.gemini.apiKey;
     const hasPerplexity = !!config.perplexity.apiKey;
     const hasDoubao = !!config.doubao.apiKey;
@@ -77,8 +78,8 @@ export const runQuickTest = async (): Promise<QuickTestResult[]> => {
   // 步骤2: 测试基础API连接
   stepStartTime = Date.now();
   try {
-    console.log('🔗 测试Gemini API连接...');
-    const testResponse = await callGeminiAPI('请简单回复"API连接正常"');
+    console.log('🔗 测试OpenRouter API连接...');
+    const testResponse = await callOpenRouterAPI('请简单回复"API连接正常"');
     
     results.push({
       step: '2. Gemini API连接',

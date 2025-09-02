@@ -7,7 +7,7 @@
 
 import React, { useState } from 'react';
 import { Toaster } from 'react-hot-toast';
-import { Settings, TestTube, Zap } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import Sidebar from './components/Layout/Sidebar';
 import DraftInput from './components/Writing/DraftInput';
 import ArticleSelection from './components/Writing/ArticleSelection';
@@ -15,7 +15,7 @@ import OutlineEditor from './components/Editor/OutlineEditor';
 import ArticleEditor from './components/Editor/ArticleEditor';
 import ImageManager from './components/Images/ImageManager';
 import APIManager from './components/Settings/APIManager';
-import APITester from './components/Testing/APITester';
+
 import StyleSummary from './components/Common/StyleSummary';
 import ProgressIndicator from './components/Common/ProgressIndicator';
 import StatusCard from './components/Common/StatusCard';
@@ -25,8 +25,7 @@ import { useAppState } from './hooks/useAppState';
 import { generateOutline } from './utils/api';
 import { KnowledgeBaseArticle, StylePrototype } from './types';
 import { generateImage } from './utils/api';
-import { testCompleteWritingFlow, quickAPITest } from './utils/e2eTest';
-import { runComprehensiveTests } from './utils/comprehensiveTest';
+
 import toast from 'react-hot-toast';
 
 function App() {
@@ -40,7 +39,7 @@ function App() {
     recommendStylePrototypesFromDraft,
     generateOutlineWithSelectedStyle,
     generateOutlineFromDraft,
-    createTestCaseData,
+
     startNewArticle,
     generateArticle,
     handleEditInstruction,
@@ -60,7 +59,7 @@ function App() {
   const [currentView, setCurrentView] = useState<'draft' | 'selection' | 'outline' | 'editor'>('draft');
   const [selectedPrototype, setSelectedPrototype] = useState<StylePrototype>();
   const [showAPIManager, setShowAPIManager] = useState(false);
-  const [showAPITester, setShowAPITester] = useState(false);
+
   const [currentDraft, setCurrentDraft] = useState<string>(''); // 保存当前草稿内容
   const [processingStatus, setProcessingStatus] = useState<string>('处理中...'); // 处理状态文本
 
@@ -216,78 +215,7 @@ function App() {
   const handleRegenerateImage = regenerateImage;
   const handleDeleteImage = deleteImage;
 
-  // 端到端测试函数
-  const handleE2ETest = async () => {
-    console.log('🚀 开始端到端测试...');
-    try {
-      const result = await testCompleteWritingFlow();
-      if (result.success) {
-        toast.success('🎉 端到端测试全部通过！');
-      } else {
-        toast.error('⚠️ 部分测试失败，请查看控制台');
-      }
-    } catch (error) {
-      console.error('测试失败:', error);
-      toast.error('测试过程出现异常');
-    }
-  };
 
-  // 快速API测试函数
-  const handleQuickTest = async () => {
-    console.log('⚡ 快速API测试...');
-    try {
-      const result = await quickAPITest();
-      const successCount = Object.values(result).filter(v => v === true).length;
-      if (successCount === 2) {
-        toast.success('✅ 所有API连接正常');
-      } else {
-        toast.error(`⚠️ ${2 - successCount}个API连接异常`);
-      }
-    } catch (error) {
-      console.error('快速测试失败:', error);
-      toast.error('快速测试过程出现异常');
-    }
-  };
-
-  // 综合测试函数
-  const handleComprehensiveTest = async () => {
-    console.log('🧪 开始综合测试...');
-    try {
-      showToast.info('开始综合测试', '正在测试所有功能模块，请稍候...');
-      
-      const results = await runComprehensiveTests();
-      
-      const totalTests = results.reduce((sum, suite) => sum + suite.summary.total, 0);
-      const totalPassed = results.reduce((sum, suite) => sum + suite.summary.passed, 0);
-      const totalFailed = results.reduce((sum, suite) => sum + suite.summary.failed, 0);
-      const successRate = ((totalPassed / totalTests) * 100).toFixed(1);
-      
-      if (totalFailed === 0) {
-        showToast.success(
-          '🎉 综合测试全部通过！',
-          `共${totalTests}项测试，成功率${successRate}%`,
-          {
-            text: '查看详情',
-            onClick: () => console.log('测试结果:', results)
-          }
-        );
-      } else {
-        showToast.warning(
-          '⚠️ 部分测试失败',
-          `${totalPassed}/${totalTests}项通过，成功率${successRate}%`,
-          {
-            text: '查看详情',
-            onClick: () => console.log('测试结果:', results)
-          }
-        );
-      }
-      
-      console.log('📊 综合测试结果:', results);
-    } catch (error) {
-      console.error('综合测试失败:', error);
-      showToast.error('综合测试失败', '测试过程中出现异常，请查看控制台');
-    }
-  };
 
   return (
     <ErrorBoundary>
@@ -323,120 +251,6 @@ function App() {
               AI写作助手
             </div>
           <div className="flex items-center gap-2">
-            {/* 临时测试按钮 */}
-            <button
-              onClick={createTestCaseData}
-              className="flex items-center gap-2 px-3 py-1 text-xs bg-yellow-100 text-yellow-700 hover:bg-yellow-200 rounded-lg transition-colors"
-            >
-              添加测试案例
-            </button>
-            <button
-              onClick={() => {
-                console.log('🧪 打印当前应用状态...');
-                console.log('📚 知识库状态:', {
-                  总数: appState.knowledgeBase.length,
-                  案例库: appState.knowledgeBase.filter(a => a.category === 'case').length,
-                  记忆库: appState.knowledgeBase.filter(a => a.category === 'memory').length,
-                  详细: appState.knowledgeBase.map(a => ({ id: a.id, title: a.title, category: a.category }))
-                });
-                console.log('🎯 当前风格原型:', stylePrototypes);
-                console.log('📝 当前文章:', appState.currentArticle);
-              }}
-              className="flex items-center gap-2 px-3 py-1 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-lg transition-colors"
-            >
-              调试状态
-            </button>
-            
-            <button
-              onClick={() => {
-                console.log('🔍 localStorage详细检查:');
-                console.log('=== 所有localStorage数据 ===');
-                for (let i = 0; i < localStorage.length; i++) {
-                  const key = localStorage.key(i);
-                  const value = localStorage.getItem(key);
-                  console.log(`${key}:`, value);
-                }
-                console.log('=== 特定key检查 ===');
-                console.log('知识库数据(正确key):', localStorage.getItem('ai_writer_knowledge_base'));
-                console.log('知识库数据(旧key):', localStorage.getItem('knowledgeBase'));
-                console.log('API配置:', localStorage.getItem('ai_writer_api_config'));
-                console.log('当前文章:', localStorage.getItem('ai_writer_current_article'));
-                alert('localStorage数据已打印到控制台，请查看！');
-              }}
-              className="flex items-center gap-2 px-3 py-1 text-xs bg-red-100 text-red-700 hover:bg-red-200 rounded-lg transition-colors"
-            >
-              检查存储
-            </button>
-            
-            <button
-              onClick={async () => {
-                const draft = prompt('请输入草稿内容：');
-                if (draft) {
-                  console.log('🚀 强制生成大纲（跳过风格推荐）...');
-                  try {
-                    // 直接调用已经导入的函数
-                    const aiOutline = await generateOutline(draft, '通用写作风格');
-                    console.log('🔍 AI大纲结果:', aiOutline);
-                    
-                    if (aiOutline && Array.isArray(aiOutline) && aiOutline.length > 0) {
-                      const outline = aiOutline.map((node, index) => ({
-                        id: String(index + 1),
-                        title: node.title || `章节 ${index + 1}`,
-                        summary: node.summary || '内容概述待补充',
-                        level: node.level || 1,
-                        order: index
-                      }));
-                      
-                      // 这个功能需要通过 useAppState hook 来实现
-                      console.log('需要通过正确的状态管理来设置文章状态');
-                      setCurrentView('outline');
-                      alert('大纲生成成功！');
-                    } else {
-                      alert('AI大纲生成失败，请查看控制台');
-                    }
-                  } catch (error) {
-                    console.error('❌ 强制大纲生成失败:', error);
-                    alert('大纲生成失败：' + error.message);
-                  }
-                }
-              }}
-              className="flex items-center gap-2 px-3 py-1 text-xs bg-green-100 text-green-700 hover:bg-green-200 rounded-lg transition-colors"
-            >
-              强制生成大纲
-            </button>
-            
-            <button
-              onClick={handleQuickTest}
-              className="flex items-center gap-2 px-3 py-2 text-blue-600 hover:text-blue-900 hover:bg-blue-100 rounded-lg transition-colors"
-              title="快速API测试"
-            >
-              <Zap className="w-4 h-4" />
-              快速测试
-            </button>
-            <button
-              onClick={handleE2ETest}
-              className="flex items-center gap-2 px-3 py-2 text-purple-600 hover:text-purple-900 hover:bg-purple-100 rounded-lg transition-colors"
-              title="端到端测试"
-            >
-              <TestTube className="w-4 h-4" />
-              完整测试
-            </button>
-            <button
-              onClick={handleComprehensiveTest}
-              className="flex items-center gap-2 px-3 py-2 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-100 rounded-lg transition-colors"
-              title="综合测试"
-            >
-              <TestTube className="w-4 h-4" />
-              综合测试
-            </button>
-            <button
-              onClick={() => setShowAPITester(true)}
-              className="flex items-center gap-2 px-3 py-2 text-green-600 hover:text-green-900 hover:bg-green-100 rounded-lg transition-colors"
-              title="API功能测试"
-            >
-              <Settings className="w-4 h-4" />
-              测试
-            </button>
             <button
               onClick={() => setShowAPIManager(true)}
               className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
@@ -622,11 +436,7 @@ function App() {
         onConfigChange={updateAPIConfig}
       />
 
-      {/* API测试弹窗 */}
-      <APITester
-        isOpen={showAPITester}
-        onClose={() => setShowAPITester(false)}
-      />
+
       </div>
     </ErrorBoundary>
   );

@@ -7,7 +7,7 @@
 
 import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
-import { callGeminiAPI, callPerplexityAPI } from './api';
+import { callOpenRouterAPI, callPerplexityAPI } from './api';
 
 // 配置PDF.js worker - 使用本地文件避免CORS问题
 // 在浏览器环境中使用相对路径
@@ -655,7 +655,7 @@ ${enhancedKeywords.includes('fastertransformer') ? `
 请生成完整的文章内容：
 `;
 
-    const content = await callGeminiAPI(prompt);
+    const content = await callOpenRouterAPI(prompt);
     
     // 提取标题（第一行或第一个#标题）
     const lines = content.split('\n').filter(line => line.trim());
