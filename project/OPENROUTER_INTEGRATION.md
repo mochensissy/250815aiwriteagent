@@ -107,3 +107,4 @@ OpenRouter API 使用 OpenAI 兼容的消息格式：
 
 **✅ OpenRouter API 集成完成！现在应用可以更稳定地使用 Gemini 模型进行文本生成。**
 
+

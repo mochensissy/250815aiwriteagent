@@ -17,11 +17,17 @@ import ImageManager from './components/Images/ImageManager';
 import APIManager from './components/Settings/APIManager';
 import APITester from './components/Testing/APITester';
 import StyleSummary from './components/Common/StyleSummary';
+import ProgressIndicator from './components/Common/ProgressIndicator';
+import StatusCard from './components/Common/StatusCard';
+import ErrorBoundary from './components/Common/ErrorBoundary';
+import { showToast } from './components/Common/Toast';
 import { useAppState } from './hooks/useAppState';
 import { generateOutline } from './utils/api';
 import { KnowledgeBaseArticle, StylePrototype } from './types';
 import { generateImage } from './utils/api';
 import { testCompleteWritingFlow, quickAPITest } from './utils/e2eTest';
+import { runComprehensiveTests } from './utils/comprehensiveTest';
+import toast from 'react-hot-toast';
 
 function App() {
   const {
@@ -57,6 +63,44 @@ function App() {
   const [showAPITester, setShowAPITester] = useState(false);
   const [currentDraft, setCurrentDraft] = useState<string>(''); // 保存当前草稿内容
   const [processingStatus, setProcessingStatus] = useState<string>('处理中...'); // 处理状态文本
+
+  // 获取当前步骤信息
+  const getProgressSteps = () => {
+    const steps = [
+      {
+        id: 'draft',
+        title: '输入草稿',
+        description: '输入您的创作灵感',
+        status: currentView === 'draft' ? 'current' : 
+                (currentView !== 'draft' ? 'completed' : 'pending')
+      },
+      {
+        id: 'selection',
+        title: '选择风格',
+        description: '匹配写作风格',
+        status: currentView === 'selection' ? 'current' : 
+                (currentView === 'outline' || currentView === 'editor' ? 'completed' : 'pending')
+      },
+      {
+        id: 'outline',
+        title: '调整大纲',
+        description: '完善文章结构',
+        status: currentView === 'outline' ? 'current' : 
+                (currentView === 'editor' ? 'completed' : 'pending')
+      },
+      {
+        id: 'editor',
+        title: '精修内容',
+        description: '完善文章内容',
+        status: currentView === 'editor' ? 'current' : 'pending'
+      }
+    ];
+
+    return steps.map(step => ({
+      ...step,
+      status: step.status as 'completed' | 'current' | 'pending'
+    }));
+  };
 
   // 处理文章选择
   const handleArticleSelect = (article: KnowledgeBaseArticle) => {
@@ -115,6 +159,17 @@ function App() {
     } catch (error) {
       console.error('❌ 草稿处理失败:', error);
       setProcessingStatus('处理失败，请重试');
+      
+      // 使用增强的错误提示
+      showToast.error(
+        '草稿处理失败',
+        error instanceof Error ? error.message : '未知错误，请重试',
+        {
+          text: '重新尝试',
+          onClick: () => handleDraftSubmit(draft, selectedPlatform)
+        }
+      );
+      
       // 3秒后重置状态
       setTimeout(() => {
         setProcessingStatus('处理中...');
@@ -194,20 +249,61 @@ function App() {
     }
   };
 
+  // 综合测试函数
+  const handleComprehensiveTest = async () => {
+    console.log('🧪 开始综合测试...');
+    try {
+      showToast.info('开始综合测试', '正在测试所有功能模块，请稍候...');
+      
+      const results = await runComprehensiveTests();
+      
+      const totalTests = results.reduce((sum, suite) => sum + suite.summary.total, 0);
+      const totalPassed = results.reduce((sum, suite) => sum + suite.summary.passed, 0);
+      const totalFailed = results.reduce((sum, suite) => sum + suite.summary.failed, 0);
+      const successRate = ((totalPassed / totalTests) * 100).toFixed(1);
+      
+      if (totalFailed === 0) {
+        showToast.success(
+          '🎉 综合测试全部通过！',
+          `共${totalTests}项测试，成功率${successRate}%`,
+          {
+            text: '查看详情',
+            onClick: () => console.log('测试结果:', results)
+          }
+        );
+      } else {
+        showToast.warning(
+          '⚠️ 部分测试失败',
+          `${totalPassed}/${totalTests}项通过，成功率${successRate}%`,
+          {
+            text: '查看详情',
+            onClick: () => console.log('测试结果:', results)
+          }
+        );
+      }
+      
+      console.log('📊 综合测试结果:', results);
+    } catch (error) {
+      console.error('综合测试失败:', error);
+      showToast.error('综合测试失败', '测试过程中出现异常，请查看控制台');
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <Toaster 
-        position="top-right"
-        toastOptions={{
-          duration: 3000,
-          style: {
-            background: '#1f2937',
-            color: 'white',
-            borderRadius: '12px',
-            padding: '16px',
-          },
-        }}
-      />
+    <ErrorBoundary>
+      <div className="min-h-screen bg-gray-50 flex">
+        <Toaster 
+          position="top-right"
+          toastOptions={{
+            duration: 3000,
+            style: {
+              background: '#1f2937',
+              color: 'white',
+              borderRadius: '12px',
+              padding: '16px',
+            },
+          }}
+        />
       
       {/* 侧边栏 */}
       <Sidebar
@@ -221,10 +317,11 @@ function App() {
       {/* 主内容区域 */}
       <div className="flex-1 flex flex-col">
         {/* 顶部工具栏 */}
-        <div className="bg-white border-b border-gray-200 px-6 py-3 flex justify-between items-center">
-          <div className="text-lg font-semibold text-gray-900">
-            AI写作助手
-          </div>
+        <div className="bg-white border-b border-gray-200 px-6 py-4">
+          <div className="flex justify-between items-center mb-4">
+            <div className="text-xl font-bold text-gray-900">
+              AI写作助手
+            </div>
           <div className="flex items-center gap-2">
             {/* 临时测试按钮 */}
             <button
@@ -325,6 +422,14 @@ function App() {
               完整测试
             </button>
             <button
+              onClick={handleComprehensiveTest}
+              className="flex items-center gap-2 px-3 py-2 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-100 rounded-lg transition-colors"
+              title="综合测试"
+            >
+              <TestTube className="w-4 h-4" />
+              综合测试
+            </button>
+            <button
               onClick={() => setShowAPITester(true)}
               className="flex items-center gap-2 px-3 py-2 text-green-600 hover:text-green-900 hover:bg-green-100 rounded-lg transition-colors"
               title="API功能测试"
@@ -340,7 +445,14 @@ function App() {
               <Settings className="w-4 h-4" />
               设置
             </button>
+            </div>
           </div>
+          
+          {/* 进度指示器 */}
+          <ProgressIndicator 
+            steps={getProgressSteps()} 
+            className="mb-0"
+          />
         </div>
 
         {currentView === 'draft' && (
@@ -358,17 +470,18 @@ function App() {
             
             {/* 全屏加载遮罩 */}
             {isProcessing && (
-              <div className="absolute inset-0 bg-white bg-opacity-80 flex items-center justify-center z-50">
-                <div className="bg-white rounded-2xl shadow-2xl p-8 flex flex-col items-center max-w-md mx-auto">
-                  <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">AI正在处理</h3>
-                  <p className="text-gray-600 text-center leading-relaxed">
-                    {processingStatus}
-                  </p>
-                  <div className="mt-4 w-full bg-gray-200 rounded-full h-2">
+              <div className="absolute inset-0 bg-white bg-opacity-95 backdrop-blur-sm flex items-center justify-center z-50">
+                <div className="max-w-md mx-auto">
+                  <StatusCard
+                    type="loading"
+                    title="AI正在处理"
+                    message={processingStatus}
+                    className="shadow-2xl"
+                  />
+                  <div className="mt-6 w-full bg-gray-200 rounded-full h-2">
                     <div className="bg-gradient-to-r from-blue-600 to-purple-600 h-2 rounded-full animate-pulse" style={{width: '60%'}}></div>
                   </div>
-                  <p className="text-sm text-gray-500 mt-2">请稍候，正在为您匹配最佳文章...</p>
+                  <p className="text-sm text-gray-500 mt-3 text-center">请稍候，正在为您匹配最佳文章...</p>
                 </div>
               </div>
             )}
@@ -514,7 +627,8 @@ function App() {
         isOpen={showAPITester}
         onClose={() => setShowAPITester(false)}
       />
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }
 

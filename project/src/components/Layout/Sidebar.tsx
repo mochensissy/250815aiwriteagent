@@ -6,9 +6,10 @@
  */
 
 import React, { useState, useRef } from 'react';
-import { FileText, Upload, Tags, Palette, Settings, BookOpen, Brain, Link, X, Eye, AlertCircle, CheckCircle } from 'lucide-react';
+import { FileText, Upload, Tags, Palette, Settings, BookOpen, Brain, Link, X, Eye, AlertCircle, CheckCircle, BarChart3 } from 'lucide-react';
 import { KnowledgeBaseArticle, StyleElement } from '../../types';
 import { parseFile, fetchWebContent, isSupportedFileType, formatFileSize, estimateReadingTime } from '../../utils/fileParser';
+import StatCard from '../Common/StatCard';
 import toast from 'react-hot-toast';
 
 interface SidebarProps {
@@ -316,6 +317,17 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, onUpload, onArticleSelect, 
   const memoryArticles = articles.filter(a => a.category === 'memory');
   const caseArticles = articles.filter(a => a.category === 'case');
   
+  // 统计信息
+  const totalStyleElements = articles.reduce((sum, article) => 
+    sum + (article.styleElements?.length || 0), 0
+  );
+  const confirmedStyleElements = articles.reduce((sum, article) => 
+    sum + (article.styleElements?.filter(e => e.confirmed).length || 0), 0
+  );
+  const totalWords = articles.reduce((sum, article) => 
+    sum + (article.content?.length || 0), 0
+  );
+  
   // 计算所有风格要素
   const allStyleElements = memoryArticles
     .flatMap(article => article.styleElements || [])
@@ -342,9 +354,27 @@ const Sidebar: React.FC<SidebarProps> = ({ articles, onUpload, onArticleSelect, 
     <div className="w-80 bg-white border-r border-gray-200 h-screen overflow-y-auto">
       {/* 头部 */}
       <div className="p-6 border-b border-gray-100">
-        <h1 className="text-xl font-semibold text-gray-900 mb-1">
-          知识库管理
-        </h1>
+        <h1 className="text-xl font-semibold text-gray-900 mb-4">知识库管理</h1>
+        
+        {/* 统计卡片 */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <StatCard
+            title="文章总数"
+            value={articles.length}
+            icon={BookOpen}
+            color="blue"
+            className="text-xs"
+          />
+          <StatCard
+            title="风格要素"
+            value={confirmedStyleElements}
+            suffix={`/${totalStyleElements}`}
+            icon={Palette}
+            color="purple"
+            className="text-xs"
+          />
+        </div>
+        
         <p className="text-gray-500 text-sm">构建个性化写作风格</p>
       </div>
 

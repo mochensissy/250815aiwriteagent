@@ -6,13 +6,14 @@
  */
 
 import { getAPIConfig } from './storage';
+import { monitorApiCall } from './performance';
 
 /**
  * 调用Google Gemini API进行文本生成
  * 包含网络问题的智能处理和降级策略
  */
 export const callGeminiAPI = async (prompt: string): Promise<string> => {
-  try {
+  return monitorApiCall(async () => {
     const config = getAPIConfig();
     console.log('🚀 调用Gemini API');
     console.log('📝 Prompt长度:', prompt.length);
@@ -73,20 +74,7 @@ export const callGeminiAPI = async (prompt: string): Promise<string> => {
     console.log('📄 生成内容预览:', result.substring(0, 200) + '...');
     
     return result;
-  } catch (error) {
-    console.error('❌ Gemini API调用失败:', error);
-    
-    // 如果是网络超时或连接问题，提供更友好的错误信息
-    if (error.name === 'AbortError') {
-      throw new Error('Gemini API请求超时，请检查网络连接');
-    }
-    
-    if (error.message?.includes('fetch failed') || error.message?.includes('timeout')) {
-      throw new Error('网络连接问题，无法访问Gemini API');
-    }
-    
-    throw error;
-  }
+  }, 'Gemini API');
 };
 
 /**
@@ -299,7 +287,7 @@ export const callPerplexityAPI = async (query: string): Promise<string> => {
  * 使用Gemini 2.5 Flash Lite模型
  */
 export const callOpenRouterAPI = async (prompt: string): Promise<string> => {
-  try {
+  return monitorApiCall(async () => {
     const config = getAPIConfig();
     console.log('🔄 调用OpenRouter API');
     console.log('📝 Prompt预览:', prompt.substring(0, 200) + '...');
@@ -321,12 +309,7 @@ export const callOpenRouterAPI = async (prompt: string): Promise<string> => {
         messages: [
           {
             role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: prompt
-              }
-            ]
+            content: prompt
           }
         ],
         max_tokens: 4000,
@@ -373,20 +356,7 @@ export const callOpenRouterAPI = async (prompt: string): Promise<string> => {
     console.log('📊 使用情况:', data.usage);
     
     return result;
-  } catch (error) {
-    console.error('❌ OpenRouter API调用失败:', error);
-    
-    // 如果是网络超时或连接问题，提供更友好的错误信息
-    if (error.name === 'AbortError') {
-      throw new Error('OpenRouter API请求超时，请检查网络连接');
-    }
-    
-    if (error.message?.includes('fetch failed') || error.message?.includes('timeout')) {
-      throw new Error('网络连接问题，无法访问OpenRouter API');
-    }
-    
-    throw error;
-  }
+  }, 'OpenRouter API');
 };
 
 /**

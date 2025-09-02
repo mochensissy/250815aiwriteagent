@@ -134,3 +134,4 @@ const StyleSummary: React.FC<StyleSummaryProps> = ({
 };
 
 export default StyleSummary;
+
