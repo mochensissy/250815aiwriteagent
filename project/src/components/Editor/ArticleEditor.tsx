@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { MessageCircle, Image, Download, Wand2, MoreHorizontal, Copy, Eye, Edit3, Send, X, Sparkles, Type, Scissors, Volume2, BookOpen, Zap } from 'lucide-react';
+import { MessageCircle, Image, Download, Wand2, MoreHorizontal, Copy, Eye, Edit3, Send, X, Sparkles, Type, Scissors, Volume2, BookOpen, Zap, CheckCircle } from 'lucide-react';
 import { EditSuggestion } from '../../types';
 import ReactMarkdown from 'react-markdown';
 import toast from 'react-hot-toast';
@@ -19,7 +19,9 @@ interface ArticleEditorProps {
   onGenerateImages: () => void;
   onGenerateCover: () => void;
   onExport: () => void;
+  onConfirmArticleComplete?: () => void; // 新增：确认文章完成回调
   isProcessing: boolean;
+  isArticleCompleted?: boolean; // 新增：文章是否已确认完成
   images?: Array<{ id: string; url: string; prompt: string; position?: number }>; // 新增：可用的图片列表
 }
 
@@ -30,7 +32,9 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({
   onGenerateImages,
   onGenerateCover,
   onExport,
+  onConfirmArticleComplete,
   isProcessing,
+  isArticleCompleted = false,
   images = []
 }) => {
   const [selectedText, setSelectedText] = useState('');
@@ -570,14 +574,31 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({
                 <Download className="w-4 h-4" />
               </button>
             )}
-            <button
-              onClick={onGenerateCover}
-              disabled={isProcessing}
-              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
-              title="生成封面"
-            >
-              <Wand2 className="w-4 h-4" />
-            </button>
+            
+            {/* 确认文章完成按钮 */}
+            {!isArticleCompleted && onConfirmArticleComplete && (
+              <button
+                onClick={onConfirmArticleComplete}
+                disabled={isProcessing}
+                className="px-3 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
+                title="确认文章已完成，可以生成封面"
+              >
+                <CheckCircle className="w-4 h-4" />
+                确认完成
+              </button>
+            )}
+            
+            {/* 生成封面按钮 - 只有文章完成后才显示 */}
+            {isArticleCompleted && (
+              <button
+                onClick={onGenerateCover}
+                disabled={isProcessing}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                title="生成封面"
+              >
+                <Wand2 className="w-4 h-4" />
+              </button>
+            )}
             <div className="relative group">
               <button
                 onClick={handleExport}

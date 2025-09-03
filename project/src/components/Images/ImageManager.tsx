@@ -7,15 +7,19 @@
 
 import React, { useState } from 'react';
 import { Image, RefreshCw, Trash2, Download, Crown, Wand2, Plus, Type, CheckCircle } from 'lucide-react';
-import { GeneratedImage } from '../../types';
+import { GeneratedImage, CoverOption } from '../../types';
 import LoadingSpinner from '../Common/LoadingSpinner';
 
 interface ImageManagerProps {
   images: GeneratedImage[];
   coverImage?: GeneratedImage;
+  coverOptions?: CoverOption[]; // 新增：封面选项
+  isArticleCompleted?: boolean; // 新增：文章是否已完成
   onRegenerateImage: (imageId: string) => void;
   onDeleteImage: (imageId: string) => void;
-  onGenerateCover: (style: string, platform: string) => void;
+  onGenerateCover: () => void; // 修改：不再需要参数
+  onRegenerateCover?: (coverId: string, newPrompt: string) => void; // 新增：重新生成特定封面
+  onSelectCover?: (cover: CoverOption) => void; // 新增：选择封面
   onGenerateImages?: () => void; // 新增：智能配图生成
   onGenerateTitles?: () => Promise<string[]>; // 新增：标题生成
   onSelectTitle?: (title: string) => void; // 新增：选择标题
@@ -26,42 +30,27 @@ interface ImageManagerProps {
 const ImageManager: React.FC<ImageManagerProps> = ({
   images,
   coverImage,
+  coverOptions = [],
+  isArticleCompleted = false,
   onRegenerateImage,
   onDeleteImage,
   onGenerateCover,
+  onRegenerateCover,
+  onSelectCover,
   onGenerateImages,
   onGenerateTitles,
   onSelectTitle,
   currentTitle = '新文章',
   isGenerating
 }) => {
-  const [showCoverGenerator, setShowCoverGenerator] = useState(false);
-  const [selectedStyle, setSelectedStyle] = useState('科技感');
-  const [selectedPlatform, setSelectedPlatform] = useState('公众号');
+
   const [showTitleGenerator, setShowTitleGenerator] = useState(false);
   const [generatedTitles, setGeneratedTitles] = useState<string[]>([]);
   const [isGeneratingTitles, setIsGeneratingTitles] = useState(false);
+  const [editingCover, setEditingCover] = useState<string | null>(null); // 正在编辑的封面ID
+  const [editingPrompt, setEditingPrompt] = useState<string>(''); // 编辑中的提示词
 
-  const coverStyles = [
-    { value: '科技感', label: '科技感', description: '现代、简洁、蓝色调', color: 'bg-blue-50 border-blue-200' },
-    { value: '温暖治愈', label: '温暖治愈', description: '温馨、柔和、暖色调', color: 'bg-orange-50 border-orange-200' },
-    { value: '商务专业', label: '商务专业', description: '专业、严谨、简约', color: 'bg-gray-50 border-gray-200' },
-    { value: '创意艺术', label: '创意艺术', description: '个性、创新、多彩', color: 'bg-purple-50 border-purple-200' },
-    { value: '简约清新', label: '简约清新', description: '清爽、干净、绿色调', color: 'bg-green-50 border-green-200' },
-    { value: '时尚潮流', label: '时尚潮流', description: '时尚、前卫、渐变', color: 'bg-pink-50 border-pink-200' }
-  ];
 
-  const platforms = [
-    { value: '公众号', label: '微信公众号', ratio: '16:9', description: '横版封面，适合长文章' },
-    { value: '小红书', label: '小红书', ratio: '3:4', description: '竖版封面，突出视觉效果' },
-    { value: '知乎', label: '知乎', ratio: '16:9', description: '横版封面，专业简洁' },
-    { value: '头条', label: '今日头条', ratio: '16:9', description: '横版封面，吸引眼球' }
-  ];
-
-  const handleGenerateCover = () => {
-    onGenerateCover(selectedStyle, selectedPlatform);
-    setShowCoverGenerator(false);
-  };
 
   // 处理标题生成
   const handleGenerateTitles = async () => {
@@ -105,14 +94,17 @@ const ImageManager: React.FC<ImageManagerProps> = ({
               {isGenerating ? '生成中...' : '智能配图'}
             </button>
           )}
-          <button
-            onClick={() => setShowCoverGenerator(true)}
-            disabled={isGenerating}
-            className="px-3 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-600 disabled:to-gray-600 text-white text-sm rounded-lg transition-all duration-200 flex items-center gap-1"
-          >
-            <Crown className="w-3 h-3" />
-            生成封面
-          </button>
+          {/* 只有文章完成后才显示封面生成按钮 */}
+          {isArticleCompleted && (
+            <button
+              onClick={onGenerateCover}
+              disabled={isGenerating}
+              className="px-3 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-600 disabled:to-gray-600 text-white text-sm rounded-lg transition-all duration-200 flex items-center gap-1"
+            >
+              <Crown className="w-3 h-3" />
+              {isGenerating ? '生成中...' : '生成封面'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -143,30 +135,110 @@ const ImageManager: React.FC<ImageManagerProps> = ({
         </div>
       </div>
 
-      {/* 封面图片 */}
-      {coverImage && (
+      {/* 封面选项展示 */}
+      {coverOptions.length > 0 && (
         <div className="mb-6">
-          <h4 className="text-sm font-medium text-gray-300 mb-3">文章封面</h4>
-          <div className="relative group">
-            <img
-              src={coverImage.url}
-              alt="文章封面"
-              className="w-full h-32 object-cover rounded-lg"
-            />
-            <div className="absolute inset-0 bg-black bg-opacity-40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
-              <button
-                onClick={() => onRegenerateImage(coverImage.id)}
-                className="p-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg transition-colors"
-              >
-                <RefreshCw className="w-4 h-4 text-white" />
-              </button>
-              <button
-                onClick={() => onDeleteImage(coverImage.id)}
-                className="p-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg transition-colors"
-              >
-                <Trash2 className="w-4 h-4 text-white" />
-              </button>
-            </div>
+          <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center">
+            <Crown className="w-4 h-4 mr-2 text-purple-400" />
+            封面选项 ({coverOptions.length}种风格)
+          </h4>
+          <div className="space-y-4">
+            {coverOptions.map((cover) => (
+              <div key={cover.id} className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                {/* 风格标题和描述 */}
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <h5 className="text-white font-medium">{cover.style}</h5>
+                    <p className="text-gray-400 text-xs mt-1">{cover.description}</p>
+                  </div>
+                  {onSelectCover && (
+                    <button
+                      onClick={() => onSelectCover(cover)}
+                      className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded transition-colors"
+                    >
+                      选择此封面
+                    </button>
+                  )}
+                </div>
+                
+                {/* 封面图片 */}
+                <div className="relative group mb-3">
+                  <img
+                    src={cover.url}
+                    alt={`${cover.style}风格封面`}
+                    className="w-full h-24 object-cover rounded"
+                  />
+                  <div className="absolute inset-0 bg-black bg-opacity-40 opacity-0 group-hover:opacity-100 transition-opacity rounded flex items-center justify-center gap-2">
+                    <button
+                      onClick={() => {
+                        setEditingCover(cover.id);
+                        setEditingPrompt(cover.prompt);
+                      }}
+                      className="p-1 bg-white bg-opacity-20 hover:bg-opacity-30 rounded transition-colors"
+                      title="编辑提示词"
+                    >
+                      <Type className="w-3 h-3 text-white" />
+                    </button>
+                    {onRegenerateCover && (
+                      <button
+                        onClick={() => onRegenerateCover(cover.id, cover.prompt)}
+                        className="p-1 bg-white bg-opacity-20 hover:bg-opacity-30 rounded transition-colors"
+                        title="重新生成"
+                      >
+                        <RefreshCw className="w-3 h-3 text-white" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* 提示词显示和编辑 */}
+                {editingCover === cover.id ? (
+                  <div className="space-y-2">
+                    <label className="text-xs text-gray-300">编辑提示词:</label>
+                    <textarea
+                      value={editingPrompt}
+                      onChange={(e) => setEditingPrompt(e.target.value)}
+                      className="w-full h-20 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-xs resize-none"
+                      placeholder="输入新的提示词..."
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          if (onRegenerateCover) {
+                            onRegenerateCover(cover.id, editingPrompt);
+                          }
+                          setEditingCover(null);
+                        }}
+                        className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
+                      >
+                        重新生成
+                      </button>
+                      <button
+                        onClick={() => setEditingCover(null)}
+                        className="px-2 py-1 bg-gray-600 hover:bg-gray-700 text-white text-xs rounded transition-colors"
+                      >
+                        取消
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-gray-700 rounded p-2">
+                    <p className="text-gray-300 text-xs leading-relaxed">
+                      {cover.prompt.length > 100 ? `${cover.prompt.substring(0, 100)}...` : cover.prompt}
+                    </p>
+                    <button
+                      onClick={() => {
+                        setEditingCover(cover.id);
+                        setEditingPrompt(cover.prompt);
+                      }}
+                      className="text-blue-400 hover:text-blue-300 text-xs mt-1 transition-colors"
+                    >
+                      点击编辑提示词
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -208,7 +280,7 @@ const ImageManager: React.FC<ImageManagerProps> = ({
         </div>
       )}
 
-      {images.length === 0 && !coverImage && (
+      {images.length === 0 && coverOptions.length === 0 && (
         <div className="text-center py-8 text-gray-500">
           <Image className="w-12 h-12 mx-auto mb-3 opacity-50" />
           <p className="mb-2">还没有生成图片</p>
@@ -226,8 +298,8 @@ const ImageManager: React.FC<ImageManagerProps> = ({
         </div>
       )}
 
-      {/* 封面生成器模态框 */}
-      {showCoverGenerator && (
+      {/* 旧的封面生成器模态框已删除，使用新的封面选项展示 */}
+      {false && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg w-96">
             <h3 className="text-lg font-semibold mb-4">生成封面图</h3>

@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { AppState, KnowledgeBaseArticle, OutlineNode, GeneratedImage, StylePrototype, APIConfig } from '../types';
+import { AppState, KnowledgeBaseArticle, OutlineNode, GeneratedImage, CoverOption, StylePrototype, APIConfig } from '../types';
 import { 
   getKnowledgeBase, 
   saveKnowledgeBase, 
@@ -289,11 +289,15 @@ export const useAppState = () => {
 
   // 用户确认风格后生成大纲
   const generateOutlineWithSelectedStyle = async (selectedPrototypes: StylePrototype[]) => {
-    if (!appState.currentArticle) return;
+    if (!appState.currentArticle) {
+      console.error('❌ generateOutlineWithSelectedStyle - 当前没有文章');
+      return;
+    }
     
     try {
-      console.log('🎨 使用选定的风格生成大纲...');
-      console.log('📊 选定的原型数量:', selectedPrototypes.length);
+      console.log('🎨 useAppState - 使用选定的风格生成大纲...');
+      console.log('📊 useAppState - 选定的原型数量:', selectedPrototypes.length);
+      console.log('📝 useAppState - 当前文章草稿:', appState.currentArticle.draft.substring(0, 100) + '...');
       
       let styleContext = '';
       
@@ -662,23 +666,16 @@ ${appState.currentArticle.outline.map(node => {
     }
   };
 
-  // 生成封面
-  const generateCover = async (style: string, platform: string) => {
-    if (!appState.currentArticle?.title) return;
+  // 生成多种风格的微信公众号封面
+  const generateCover = async () => {
+    if (!appState.currentArticle?.title || !appState.currentArticle?.isCompleted) {
+      toast.error('请先确认文章已完成！');
+      return;
+    }
 
     setIsProcessing(true);
     
     try {
-      // 根据平台生成适配的尺寸信息
-      const platformSpecs = {
-        '公众号': { ratio: '16:9', description: '微信公众号封面，横版布局' },
-        '小红书': { ratio: '3:4', description: '小红书封面，竖版布局' },
-        '知乎': { ratio: '16:9', description: '知乎文章封面，横版布局' },
-        '头条': { ratio: '16:9', description: '今日头条封面，横版布局' }
-      };
-      
-      const spec = platformSpecs[platform as keyof typeof platformSpecs] || platformSpecs['公众号'];
-      
       // 使用AI分析完整文章内容
       const { analyzeContentWithAI } = await import('../utils/api');
       const contentAnalysis = await analyzeContentWithAI(appState.currentArticle.content);
@@ -688,67 +685,109 @@ ${appState.currentArticle.outline.map(node => {
         (appState.currentArticle.content.split('\n')[0]?.replace(/^#+\s*/, '') || '文章标题') : 
         appState.currentArticle.title;
       
-      const prompt = `
-作为专业的封面设计师，请为以下文章生成${platform}平台的封面图：
+      // 定义4种封面风格
+      const coverStyles = [
+        {
+          style: '简约商务',
+          description: '清爽配色，突出标题和核心信息，适合商务和职场类内容',
+          designElements: '简洁线条、现代字体、商务蓝或灰色调'
+        },
+        {
+          style: '创意设计', 
+          description: '丰富视觉元素，适合个人品牌和创意类内容',
+          designElements: '渐变色彩、几何图形、动感构图'
+        },
+        {
+          style: '专业学术',
+          description: '严谨布局，适合知识分享和深度内容',
+          designElements: '稳重配色、规整排版、学术氛围'
+        },
+        {
+          style: '时尚生活',
+          description: '温馨配色，适合生活类和情感类内容',
+          designElements: '暖色调、柔和曲线、生活化元素'
+        }
+      ];
+
+      // 生成多个封面选项
+      const coverOptions = [];
+      
+      for (const styleInfo of coverStyles) {
+        const prompt = `
+作为专业的微信公众号封面设计师，请为以下文章生成${styleInfo.style}风格的封面图：
 
 【文章信息】：
 - 标题：${articleTitle}
 - 主要主题：${contentAnalysis.mainTheme}
 - 情感色调：${contentAnalysis.emotionalTone}
 - 场景类型：${contentAnalysis.sceneType}
+- 视觉关键词：${contentAnalysis.visualKeywords?.join(', ') || '专业、现代'}
 
 【完整文章内容】：
-${appState.currentArticle.content}
+${appState.currentArticle.content.substring(0, 1000)}...
 
-【封面设计原则】：
+【${styleInfo.style}风格设计要求】：
 
-1. **主题一致性**：
-   - 封面必须准确体现文章的核心主题："${contentAnalysis.mainTheme}"
-   - 传达文章的整体情感氛围："${contentAnalysis.emotionalTone}"
-   - 与文章内容形成呼应，而非独立的装饰
+1. **风格特色**：
+   - ${styleInfo.description}
+   - 设计元素：${styleInfo.designElements}
+   - 微信公众号16:9横版布局
 
-2. **平台适配性**：
-   - 风格：${style}风格
-   - 平台：${spec.description}
-   - 比例：${spec.ratio}
-   - 符合${platform}平台的视觉规范和用户习惯
-
-3. **视觉层次**：
-   - 主视觉区域：体现文章核心主题和情感
-   - 标题区域：清晰展示"${articleTitle}"
-   - 整体构图：简洁有力，突出重点
-
-4. **设计质量**：
-   - 现代简约的设计风格
-   - 色彩和谐，与文章情感色调匹配
-   - 专业的视觉效果，适合${platform}平台展示
+2. **核心设计原则**：
+   - 准确传达文章主题"${contentAnalysis.mainTheme}"
+   - 体现${contentAnalysis.emotionalTone}的情感氛围
+   - 标题"${articleTitle}"清晰可读，占据显著位置
    - 无任何水印或AI标识
 
-【具体要求】：
-请生成一个${style}风格的${platform}封面设计，${spec.ratio}比例。封面应该：
-- 准确传达文章"${articleTitle}"的核心主题和情感
-- 基于完整文章内容理解，而非仅仅标题
-- 营造与文章内容相符的视觉氛围
-- 使用专业的构图和色彩搭配
-- 确保标题文字清晰可读，与视觉设计和谐统一
-`;
-      const imageUrl = await generateImage(prompt);
-      
-      const coverImage: GeneratedImage = {
-        id: `cover_${Date.now()}`,
-        url: imageUrl,
-        prompt
-      };
+3. **视觉构成**：
+   - 主视觉：占据封面60%区域，体现文章核心内容
+   - 标题区域：明显的文字区域，字体大小适中
+   - 背景：与主题相关的${styleInfo.style}风格背景
+   - 整体和谐统一，符合${styleInfo.style}审美
 
+4. **技术要求**：
+   - 1280x720像素，适合微信公众号展示
+   - 高清无压缩，色彩饱和度适中
+   - ${styleInfo.style}风格的色彩搭配和构图
+
+请生成一个专业的${styleInfo.style}风格微信公众号封面。
+`;
+
+        try {
+          const imageUrl = await generateImage(prompt);
+          
+          coverOptions.push({
+            id: `cover_${styleInfo.style}_${Date.now()}`,
+            style: styleInfo.style,
+            url: imageUrl,
+            prompt: prompt,
+            description: styleInfo.description
+          });
+          
+          // 给用户一些进度反馈
+          toast.success(`${styleInfo.style}风格封面已生成`);
+          
+        } catch (error) {
+          console.error(`${styleInfo.style}风格封面生成失败:`, error);
+          // 继续生成其他风格，不中断整个流程
+        }
+      }
+
+      if (coverOptions.length === 0) {
+        throw new Error('所有风格的封面都生成失败');
+      }
+
+      // 保存封面选项到状态
       setAppState(prev => ({
         ...prev,
         currentArticle: prev.currentArticle ? {
           ...prev.currentArticle,
-          coverImage
+          coverOptions
         } : undefined
       }));
 
-      toast.success('封面已生成！');
+      toast.success(`成功生成${coverOptions.length}种风格的封面选项！`);
+      
     } catch (error) {
       console.error('封面生成失败:', error);
       toast.error('封面生成失败，请重试');
@@ -1059,6 +1098,21 @@ ${appState.currentArticle.content}
     toast.success(`标题已更新并插入到文章开头：${title}`);
   };
 
+  // 确认文章完成
+  const confirmArticleComplete = () => {
+    if (!appState.currentArticle) return;
+
+    setAppState(prev => ({
+      ...prev,
+      currentArticle: prev.currentArticle ? {
+        ...prev.currentArticle,
+        isCompleted: true
+      } : undefined
+    }));
+
+    toast.success('文章已确认完成！现在可以生成封面了');
+  };
+
   return {
     appState,
     isProcessing,
@@ -1083,6 +1137,7 @@ ${appState.currentArticle.content}
     updateContent,
     generateTitles,
     setSelectedTitle,
+    confirmArticleComplete,
     exportArticle,
     updateAPIConfig,
     setAppState

@@ -79,6 +79,15 @@ export interface GeneratedImage {
   position?: number; // 在文章中的位置
 }
 
+// 封面选项类型
+export interface CoverOption {
+  id: string;
+  style: string; // 风格名称（如"简约商务"、"创意设计"等）
+  url: string;
+  prompt: string;
+  description: string; // 风格描述
+}
+
 // API配置相关类型
 export interface APIConfig {
   gemini: {
@@ -117,6 +126,8 @@ export interface AppState {
     content: string;
     images: GeneratedImage[];
     coverImage?: GeneratedImage;
+    coverOptions?: CoverOption[]; // 新增：封面选项列表
+    isCompleted?: boolean; // 新增：文章是否已确认完成
   };
   knowledgeBase: KnowledgeBaseArticle[];
   termMappings: TermMapping[];

@@ -52,6 +52,7 @@ function App() {
     updateContent,
     generateTitles,
     setSelectedTitle,
+    confirmArticleComplete,
     exportArticle,
     updateAPIConfig
   } = useAppState();
@@ -184,8 +185,14 @@ function App() {
 
   // 处理文章选择页面的确认选择
   const handleConfirmArticleSelection = async (selectedPrototypes: StylePrototype[]) => {
-    await generateOutlineWithSelectedStyle(selectedPrototypes);
-    setCurrentView('outline');
+    try {
+      console.log('📝 App.tsx - 开始处理文章选择确认，原型数量:', selectedPrototypes.length);
+      await generateOutlineWithSelectedStyle(selectedPrototypes);
+      console.log('✅ App.tsx - 大纲生成成功，切换到大纲页面');
+      setCurrentView('outline');
+    } catch (error) {
+      console.error('❌ App.tsx - 处理文章选择失败:', error);
+    }
   };
 
   // 处理跳过文章选择
@@ -402,9 +409,11 @@ function App() {
                 onChange={updateContent}
                 onEditInstruction={handleEditInstruction}
                 onGenerateImages={generateImages}
-                onGenerateCover={() => generateCover('科技感', '公众号')}
+                onGenerateCover={generateCover}
+                onConfirmArticleComplete={confirmArticleComplete}
                 onExport={exportArticle}
                 isProcessing={isProcessing}
+                isArticleCompleted={appState.currentArticle.isCompleted}
                 images={appState.currentArticle.images}
               />
             </div>
@@ -414,6 +423,8 @@ function App() {
               <ImageManager
                 images={appState.currentArticle.images}
                 coverImage={appState.currentArticle.coverImage}
+                coverOptions={appState.currentArticle.coverOptions}
+                isArticleCompleted={appState.currentArticle.isCompleted}
                 onRegenerateImage={handleRegenerateImage}
                 onDeleteImage={handleDeleteImage}
                 onGenerateCover={generateCover}

@@ -40,13 +40,14 @@ const ArticleSelection: React.FC<ArticleSelectionProps> = ({
 
   // 切换文章选择状态
   const togglePrototypeSelection = (prototype: StylePrototype) => {
+    console.log('🔄 切换文章选择，原型ID:', prototype.id);
     setSelectedPrototypes(prev => {
       const isSelected = prev.some(p => p.id === prototype.id);
-      if (isSelected) {
-        return prev.filter(p => p.id !== prototype.id);
-      } else {
-        return [...prev, prototype];
-      }
+      const newSelected = isSelected 
+        ? prev.filter(p => p.id !== prototype.id)
+        : [...prev, prototype];
+      console.log('📊 选择状态变更，新的选中数量:', newSelected.length);
+      return newSelected;
     });
   };
 
@@ -257,7 +258,11 @@ const ArticleSelection: React.FC<ArticleSelectionProps> = ({
 
           {/* 确认选择按钮 */}
           <button
-            onClick={() => onConfirmSelection(selectedPrototypes)}
+            onClick={() => {
+              console.log('🔘 确认选择按钮被点击，选中的原型:', selectedPrototypes);
+              console.log('📊 按钮状态 - 选中数量:', selectedPrototypes.length, '处理中:', isProcessing);
+              onConfirmSelection(selectedPrototypes);
+            }}
             disabled={selectedPrototypes.length === 0 || isProcessing}
             className="px-8 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-xl font-semibold transition-all duration-200 flex items-center gap-3 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
           >
