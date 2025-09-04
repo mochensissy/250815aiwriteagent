@@ -76,6 +76,15 @@ const ArticleSelection: React.FC<ArticleSelectionProps> = ({
     return content.substring(0, maxLength) + '...';
   };
 
+  // 调试信息 - 检查数据状态
+  console.log('🔍 ArticleSelection组件渲染，数据状态:', {
+    草稿长度: draft.length,
+    推荐原型数量: stylePrototypes.length,
+    知识库文章数量: knowledgeBase.length,
+    当前选中数量: selectedPrototypes.length,
+    是否处理中: isProcessing
+  });
+
   return (
     <div className="max-w-6xl mx-auto w-full">
       {/* 头部说明 */}
@@ -86,6 +95,15 @@ const ArticleSelection: React.FC<ArticleSelectionProps> = ({
         <p className="text-xl text-gray-600 leading-relaxed max-w-4xl mx-auto">
           AI为您找到了 {stylePrototypes.length} 篇风格相似的文章。选择您希望参考的文章，我们将基于其写作风格为您生成个性化大纲。
         </p>
+        {/* 调试信息显示 */}
+        <div className="mt-4 p-4 bg-blue-50 rounded-lg text-left text-sm">
+          <strong>系统状态:</strong><br/>
+          推荐文章数量: {stylePrototypes.length}<br/>
+          知识库文章数量: {knowledgeBase.length}<br/>
+          当前选中数量: {selectedPrototypes.length}<br/>
+          处理状态: {isProcessing ? '处理中' : '空闲'}<br/>
+          <strong>可用文章ID:</strong> {knowledgeBase.map(a => a.id).join(', ')}
+        </div>
       </div>
 
       {/* 草稿预览 */}
@@ -113,12 +131,47 @@ const ArticleSelection: React.FC<ArticleSelectionProps> = ({
           </div>
         </div>
 
+        {/* 如果没有推荐文章，显示提示 */}
+        {stylePrototypes.length === 0 && (
+          <div className="text-center py-12 bg-yellow-50 rounded-lg border border-yellow-200">
+            <Sparkles className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">暂无匹配的参考文章</h3>
+            <p className="text-gray-600 mb-4">请先在左侧知识库中添加一些文章作为写作风格参考。</p>
+            <button
+              onClick={onSkipSelection}
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+            >
+              继续使用通用模板
+            </button>
+          </div>
+        )}
+
         {stylePrototypes.map((prototype) => {
           const article = getArticleDetails(prototype.articleId);
           const isSelected = selectedPrototypes.some(p => p.id === prototype.id);
           const isExpanded = expandedArticle === prototype.articleId;
 
-          if (!article) return null;
+          console.log('🔍 渲染原型:', {
+            原型ID: prototype.id,
+            文章ID: prototype.articleId,
+            找到文章: !!article,
+            文章标题: article?.title || '未找到',
+            是否选中: isSelected
+          });
+
+          if (!article) {
+            console.warn('⚠️ 未找到文章，原型ID:', prototype.id, '文章ID:', prototype.articleId);
+            return (
+              <div key={prototype.id} className="bg-yellow-100 p-4 rounded-lg border border-yellow-300">
+                <p className="text-yellow-800">
+                  <strong>文章数据不匹配:</strong> 推荐的文章ID "{prototype.articleId}" 在知识库中不存在
+                </p>
+                <p className="text-yellow-600 text-sm mt-2">
+                  这通常是AI推荐系统的暂时性问题，请尝试重新提交草稿或使用"跳过"按钮继续。
+                </p>
+              </div>
+            );
+          }
 
           return (
             <div
@@ -165,12 +218,20 @@ const ArticleSelection: React.FC<ArticleSelectionProps> = ({
 
                   {/* 选择按钮 */}
                   <button
-                    onClick={() => togglePrototypeSelection(prototype)}
+                    onClick={() => {
+                      console.log('🔘 选择按钮被点击，原型详情:', {
+                        id: prototype.id,
+                        articleId: prototype.articleId,
+                        当前是否选中: isSelected
+                      });
+                      togglePrototypeSelection(prototype);
+                    }}
                     className={`ml-4 w-12 h-12 rounded-full border-2 flex items-center justify-center transition-all ${
                       isSelected
                         ? 'bg-purple-600 border-purple-600 text-white'
                         : 'border-gray-300 hover:border-purple-400 text-gray-400 hover:text-purple-600'
                     }`}
+                    title={isSelected ? '取消选择' : '选择此文章'}
                   >
                     {isSelected && <Check className="w-5 h-5" />}
                   </button>
@@ -256,15 +317,38 @@ const ArticleSelection: React.FC<ArticleSelectionProps> = ({
             跳过，使用通用模板
           </button>
 
+          {/* 紧急修复按钮 - 如果选择功能有问题 */}
+          {stylePrototypes.length > 0 && selectedPrototypes.length === 0 && (
+            <button
+              onClick={() => {
+                console.log('🚨 使用紧急修复 - 自动选择第一个推荐文章');
+                const firstPrototype = stylePrototypes[0];
+                if (firstPrototype) {
+                  console.log('📝 强制选择第一个原型:', firstPrototype);
+                  onConfirmSelection([firstPrototype]);
+                }
+              }}
+              disabled={isProcessing}
+              className="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl transition-colors font-medium"
+            >
+              🚨 强制使用第一篇
+            </button>
+          )}
+
           {/* 确认选择按钮 */}
           <button
             onClick={() => {
               console.log('🔘 确认选择按钮被点击，选中的原型:', selectedPrototypes);
               console.log('📊 按钮状态 - 选中数量:', selectedPrototypes.length, '处理中:', isProcessing);
+              console.log('🔒 按钮是否禁用:', selectedPrototypes.length === 0 || isProcessing);
               onConfirmSelection(selectedPrototypes);
             }}
             disabled={selectedPrototypes.length === 0 || isProcessing}
-            className="px-8 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-xl font-semibold transition-all duration-200 flex items-center gap-3 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+            className={`px-8 py-3 font-semibold transition-all duration-200 flex items-center gap-3 shadow-lg rounded-xl ${
+              selectedPrototypes.length === 0 || isProcessing
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white hover:shadow-xl'
+            }`}
           >
             {isProcessing ? (
               <>

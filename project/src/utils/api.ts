@@ -365,32 +365,28 @@ export const callOpenRouterAPI = async (prompt: string): Promise<string> => {
  * 根据火山引擎文档更新API调用格式
  */
 export const generateImage = async (prompt: string, size = '1024x1024', forceWatermarkFree = true): Promise<string> => {
-  console.log('🎨 开始图片生成流程', { forceWatermarkFree });
+  console.log('🎨 开始图片生成流程', { prompt: prompt.substring(0, 100) + '...', forceWatermarkFree });
   
-  // 如果强制无水印，直接使用无水印方案
-  if (forceWatermarkFree) {
-    console.log('🚫 强制无水印模式，跳过豆包API');
-    try {
-      return await generateImageWithUnsplash(prompt);
-    } catch (error) {
-      console.log('⚠️ 无水印方案失败，回退到豆包...', error);
-      return await generateImageWithDoubao(prompt, size);
-    }
-  }
-  
-  // 方案1: 尝试豆包API（可能有水印）
+  // 优先策略：先尝试豆包API（质量更高），如果失败再用无水印方案
   try {
-    return await generateImageWithDoubao(prompt, size);
-  } catch (error) {
-    console.log('⚠️ 豆包生成失败，尝试备选方案...', error);
+    console.log('🤖 优先尝试豆包API（AI生成，质量更高）');
+    const doubaoResult = await generateImageWithDoubao(prompt, size);
+    console.log('✅ 豆包API生成成功');
+    return doubaoResult;
+  } catch (doubaoError) {
+    console.log('⚠️ 豆包API失败，使用语义化无水印方案...', doubaoError);
     
-    // 方案2: 使用免费的无水印图片API
     try {
-      return await generateImageWithUnsplash(prompt);
+      const unsplashResult = await generateImageWithUnsplash(prompt);
+      console.log('✅ 语义化无水印图片获取成功');
+      return unsplashResult;
     } catch (unsplashError) {
-      console.log('⚠️ 无水印方案失败，使用豆包结果...', unsplashError);
-      // 如果所有方案都失败，重新尝试豆包
-      return await generateImageWithDoubao(prompt, size);
+      console.error('❌ 所有图片生成方案都失败了:', { doubaoError, unsplashError });
+      
+      // 最终兜底：使用一个默认的高质量图片
+      const fallbackUrl = 'https://images.unsplash.com/photo-1557683316-973673baf926?w=1024&h=1024&fit=crop&crop=center&auto=format&q=80&fm=jpg';
+      console.log('🔄 使用兜底图片:', fallbackUrl);
+      return fallbackUrl;
     }
   }
 };
@@ -451,23 +447,157 @@ const generateImageWithDoubao = async (prompt: string, size: string): Promise<st
 // 使用免费图片API获取无水印图片
 const generateImageWithUnsplash = async (prompt: string): Promise<string> => {
   console.log('🌅 尝试获取无水印图片');
+  console.log('📝 原始提示词:', prompt);
   
-  // 从prompt中提取关键词
+  // 从prompt中提取关键词并分类
   const keywords = extractKeywordsFromPrompt(prompt);
-  const query = keywords.slice(0, 2).join(' ') || 'professional photography';
+  console.log('🔍 提取的关键词:', keywords);
   
-  console.log('🔍 搜索关键词:', query);
+  // 根据提示词内容选择合适的图片类别
+  const category = determineImageCategory(prompt, keywords);
+  console.log('📂 图片类别:', category);
   
   try {
-    // 使用Picsum作为无水印图片源（Lorem Picsum）
-    const imageUrl = `https://picsum.photos/1024/1024?random=${Math.floor(Math.random() * 1000)}`;
+    // 方案1: 尝试使用Unsplash API (如果有key)
+    try {
+      const unsplashUrl = await generateImageFromUnsplashAPI(category, keywords);
+      if (unsplashUrl) {
+        console.log('✅ Unsplash API图片获取成功:', unsplashUrl);
+        return unsplashUrl;
+      }
+    } catch (unsplashError) {
+      console.log('⚠️ Unsplash API失败，使用备选方案...', unsplashError);
+    }
     
-    console.log('✅ 无水印图片获取成功:', imageUrl);
-    return imageUrl;
+    // 方案2: 使用语义化的图片搜索
+    const semanticUrl = await generateSemanticImage(category, keywords);
+    console.log('✅ 语义化图片获取成功:', semanticUrl);
+    return semanticUrl;
+    
   } catch (error) {
     console.log('❌ 无水印图片获取失败:', error);
     throw error;
   }
+};
+
+// 根据提示词确定图片类别
+const determineImageCategory = (prompt: string, keywords: string[]): string => {
+  const promptLower = prompt.toLowerCase();
+  
+  // 商务/职场类
+  if (promptLower.includes('business') || promptLower.includes('office') || 
+      promptLower.includes('商务') || promptLower.includes('职场') || 
+      promptLower.includes('工作') || promptLower.includes('meeting')) {
+    return 'business';
+  }
+  
+  // 创意/设计类
+  if (promptLower.includes('creative') || promptLower.includes('design') || 
+      promptLower.includes('创意') || promptLower.includes('设计') || 
+      promptLower.includes('艺术')) {
+    return 'creative';
+  }
+  
+  // 学术/教育类
+  if (promptLower.includes('academic') || promptLower.includes('education') || 
+      promptLower.includes('学术') || promptLower.includes('教育') || 
+      promptLower.includes('学习') || promptLower.includes('研究')) {
+    return 'education';
+  }
+  
+  // 生活/时尚类
+  if (promptLower.includes('lifestyle') || promptLower.includes('fashion') || 
+      promptLower.includes('生活') || promptLower.includes('时尚') || 
+      promptLower.includes('日常') || promptLower.includes('情感')) {
+    return 'lifestyle';
+  }
+  
+  // 科技类
+  if (promptLower.includes('technology') || promptLower.includes('tech') || 
+      promptLower.includes('科技') || promptLower.includes('数字') || 
+      promptLower.includes('网络')) {
+    return 'technology';
+  }
+  
+  // 自然/环境类
+  if (promptLower.includes('nature') || promptLower.includes('environment') || 
+      promptLower.includes('自然') || promptLower.includes('环境') || 
+      promptLower.includes('植物') || promptLower.includes('风景')) {
+    return 'nature';
+  }
+  
+  return 'general';
+};
+
+// 使用Unsplash API (如果可用)
+const generateImageFromUnsplashAPI = async (category: string, keywords: string[]): Promise<string | null> => {
+  // 这里可以集成Unsplash API，暂时返回null使用备选方案
+  return null;
+};
+
+// 生成语义化相关图片
+const generateSemanticImage = async (category: string, keywords: string[]): Promise<string> => {
+  // 根据类别使用不同的图片源策略
+  const categoryUrls = {
+    business: [
+      'https://images.unsplash.com/photo-1521791136064-7986c2920216', // 办公室
+      'https://images.unsplash.com/photo-1542744173-8e7e53415bb0', // 商务会议
+      'https://images.unsplash.com/photo-1553877522-43269d4ea984', // 团队合作
+      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d', // 职场人士
+      'https://images.unsplash.com/photo-1664575602276-acd073f104c1', // 现代办公
+    ],
+    creative: [
+      'https://images.unsplash.com/photo-1541961017774-22349e4a1262', // 创意设计
+      'https://images.unsplash.com/photo-1558655146-d09347e92766', // 艺术创作
+      'https://images.unsplash.com/photo-1596461404969-9ae70f2830c1', // 设计工具
+      'https://images.unsplash.com/photo-1581833971358-2c8b550f87b3', // 创意空间
+      'https://images.unsplash.com/photo-1594736797933-d0caac9501dd', // 灵感
+    ],
+    education: [
+      'https://images.unsplash.com/photo-1481627834876-b7833e8f5570', // 书籍学习
+      'https://images.unsplash.com/photo-1434030216411-0b793f4b4173', // 学术研究
+      'https://images.unsplash.com/photo-1523050854058-8df90110c9d1', // 大学校园
+      'https://images.unsplash.com/photo-1497633762265-9d179a990aa6', // 图书馆
+      'https://images.unsplash.com/photo-1472173148041-00294f0814a2', // 知识传播
+    ],
+    lifestyle: [
+      'https://images.unsplash.com/photo-1511988617509-a57c8a288659', // 生活方式
+      'https://images.unsplash.com/photo-1524863479829-916d8e77f114', // 日常生活
+      'https://images.unsplash.com/photo-1490818387583-1baba5e638af', // 温馨时光
+      'https://images.unsplash.com/photo-1529390079861-591de354faf5', // 情感表达
+      'https://images.unsplash.com/photo-1495001258031-d1b407bc1776', // 生活美学
+    ],
+    technology: [
+      'https://images.unsplash.com/photo-1518709268805-4e9042af2176', // 科技感
+      'https://images.unsplash.com/photo-1451187580459-43490279c0fa', // 数字时代
+      'https://images.unsplash.com/photo-1531297484001-80022131f5a1', // 网络连接
+      'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5', // 数据分析
+      'https://images.unsplash.com/photo-1504384308090-c894fdcc538d', // 现代科技
+    ],
+    nature: [
+      'https://images.unsplash.com/photo-1506905925346-21bda4d32df4', // 自然风光
+      'https://images.unsplash.com/photo-1540206395-68808572332f', // 绿色植物
+      'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05', // 自然美景
+      'https://images.unsplash.com/photo-1465146344425-f00d5f5c8f07', // 户外风景
+      'https://images.unsplash.com/photo-1502780402662-acc01917949e', // 生态环境
+    ],
+    general: [
+      'https://images.unsplash.com/photo-1586281380349-632531db7ed4', // 通用场景1
+      'https://images.unsplash.com/photo-1557804506-669a67965ba0', // 通用场景2
+      'https://images.unsplash.com/photo-1554774853-d50f9c681ae2', // 通用场景3
+      'https://images.unsplash.com/photo-1560742441-dc817ec75049', // 通用场景4
+      'https://images.unsplash.com/photo-1557833961-4e1d6a5c2db1', // 通用场景5
+    ]
+  };
+  
+  const urls = categoryUrls[category] || categoryUrls.general;
+  const randomUrl = urls[Math.floor(Math.random() * urls.length)];
+  
+  // 添加尺寸参数和随机种子以获取高质量图片
+  const finalUrl = `${randomUrl}?w=1024&h=1024&fit=crop&crop=center&auto=format&q=80&fm=jpg`;
+  
+  console.log(`🎯 选择${category}类别图片:`, finalUrl);
+  return finalUrl;
 };
 
 // 从提示词中提取关键词

@@ -138,9 +138,17 @@ function App() {
       // 第三步：AI推荐风格原型
       setProcessingStatus('AI正在分析您的写作风格...');
       console.log('🔍 开始推荐风格原型...');
+      console.log('📚 当前知识库状态:', {
+        知识库文章数量: appState.knowledgeBase.length,
+        知识库文章列表: appState.knowledgeBase.map(a => ({ id: a.id, title: a.title, category: a.category }))
+      });
+      
       const recommendedPrototypes = await recommendStylePrototypesFromDraft(draft);
       
-      console.log('📊 推荐结果数量:', recommendedPrototypes.length);
+      console.log('📊 推荐结果详情:', {
+        推荐数量: recommendedPrototypes.length,
+        推荐列表: recommendedPrototypes.map(p => ({ id: p.id, articleId: p.articleId, similarity: p.similarity }))
+      });
       
       // 第四步：根据推荐结果决定跳转页面
       if (recommendedPrototypes.length > 0) {
@@ -311,6 +319,12 @@ function App() {
 
         {currentView === 'selection' && (
           <div className="flex-1 p-8 bg-white">
+            {console.log('🔍 App.tsx - 传递给ArticleSelection的props:', {
+              草稿: currentDraft ? `${currentDraft.substring(0, 50)}...` : '无',
+              推荐原型数量: stylePrototypes.length,
+              知识库文章数量: appState.knowledgeBase.length,
+              处理状态: isProcessing
+            })}
             <ArticleSelection
               draft={currentDraft}
               stylePrototypes={stylePrototypes}

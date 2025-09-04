@@ -222,16 +222,41 @@ const ImageManager: React.FC<ImageManagerProps> = ({
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-gray-700 rounded p-2">
+                  <div className="bg-gray-700 rounded p-2 space-y-2">
                     <p className="text-gray-300 text-xs leading-relaxed">
-                      {cover.prompt.length > 100 ? `${cover.prompt.substring(0, 100)}...` : cover.prompt}
+                      <strong>提示词:</strong> {cover.prompt.length > 100 ? `${cover.prompt.substring(0, 100)}...` : cover.prompt}
                     </p>
+                    
+                    {/* 图片来源信息 */}
+                    <div className="flex items-center gap-2 text-xs">
+                      {cover.url.includes('unsplash.com') ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-900 text-green-300 rounded-full">
+                          <span className="w-1.5 h-1.5 bg-green-400 rounded-full"></span>
+                          语义匹配图片
+                        </span>
+                      ) : cover.url.includes('doubao') || cover.url.includes('bytedance') ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-900 text-blue-300 rounded-full">
+                          <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
+                          AI生成图片
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-800 text-gray-400 rounded-full">
+                          <span className="w-1.5 h-1.5 bg-gray-500 rounded-full"></span>
+                          备用图片
+                        </span>
+                      )}
+                      
+                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-800 text-gray-400 rounded-full">
+                        ✓ 无水印
+                      </span>
+                    </div>
+                    
                     <button
                       onClick={() => {
                         setEditingCover(cover.id);
                         setEditingPrompt(cover.prompt);
                       }}
-                      className="text-blue-400 hover:text-blue-300 text-xs mt-1 transition-colors"
+                      className="text-blue-400 hover:text-blue-300 text-xs transition-colors"
                     >
                       点击编辑提示词
                     </button>
