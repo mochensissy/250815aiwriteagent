@@ -14,6 +14,7 @@ import ArticleSelection from './components/Writing/ArticleSelection';
 import OutlineEditor from './components/Editor/OutlineEditor';
 import ArticleEditor from './components/Editor/ArticleEditor';
 import ImageManager from './components/Images/ImageManager';
+import ParallelProgressIndicator from './components/Common/ParallelProgressIndicator';
 import APIManager from './components/Settings/APIManager';
 
 import StyleSummary from './components/Common/StyleSummary';
@@ -32,6 +33,7 @@ function App() {
   const {
     appState,
     isProcessing,
+    parallelTasks,
     stylePrototypes,
     addToKnowledgeBase,
     deleteArticle,
@@ -434,6 +436,17 @@ function App() {
 
             {/* 右侧图片管理面板 */}
             <div className="w-80 p-8 bg-gray-50 border-l border-gray-200">
+              {/* 🚀 并行进度指示器 - 显示封面生成进度 */}
+              {parallelTasks.length > 0 && (
+                <div className="mb-6">
+                  <ParallelProgressIndicator
+                    tasks={parallelTasks}
+                    title="封面生成进度"
+                    className="mb-4"
+                  />
+                </div>
+              )}
+              
               <ImageManager
                 images={appState.currentArticle.images}
                 coverImage={appState.currentArticle.coverImage}

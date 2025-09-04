@@ -72,6 +72,157 @@ export const downloadTextFile = (content: string, filename: string, mimeType: st
 };
 
 /**
+ * 🚀 增强版多格式导出功能
+ */
+export const exportArticle = {
+  /**
+   * 导出为Markdown格式
+   */
+  asMarkdown: (content: string, title?: string): void => {
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const filename = title ? `${title.replace(/[^\w\s]/gi, '')}_${timestamp}.md` : `article_${timestamp}.md`;
+    downloadTextFile(content, filename, 'text/markdown');
+  },
+  
+  /**
+   * 导出为纯文本格式
+   */
+  asText: (content: string, title?: string): void => {
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const filename = title ? `${title.replace(/[^\w\s]/gi, '')}_${timestamp}.txt` : `article_${timestamp}.txt`;
+    downloadTextFile(content, filename, 'text/plain');
+  },
+  
+  /**
+   * 导出为HTML格式（带样式）
+   */
+  asHTML: (content: string, title?: string): void => {
+    const htmlContent = convertMarkdownToHTML(content, title);
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const filename = title ? `${title.replace(/[^\w\s]/gi, '')}_${timestamp}.html` : `article_${timestamp}.html`;
+    downloadTextFile(htmlContent, filename, 'text/html');
+  },
+  
+  /**
+   * 复制为富文本格式（适合直接粘贴到公众号）
+   */
+  copyAsRichText: async (content: string): Promise<boolean> => {
+    try {
+      // 转换Markdown为富文本
+      const richTextContent = convertMarkdownToRichText(content);
+      return await copyToClipboard(richTextContent, '富文本格式已复制，可直接粘贴到微信公众号');
+    } catch (error) {
+      console.error('富文本复制失败:', error);
+      toast.error('富文本复制失败，请使用普通复制');
+      return false;
+    }
+  },
+  
+  /**
+   * 导出为JSON格式（包含元数据）
+   */
+  asJSON: (content: string, metadata: any = {}, title?: string): void => {
+    const exportData = {
+      title: title || '未命名文章',
+      content,
+      metadata: {
+        ...metadata,
+        exportedAt: new Date().toISOString(),
+        version: '1.0',
+        format: 'AI写作助手导出'
+      }
+    };
+    
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const filename = title ? `${title.replace(/[^\w\s]/gi, '')}_${timestamp}.json` : `article_${timestamp}.json`;
+    downloadTextFile(JSON.stringify(exportData, null, 2), filename, 'application/json');
+  }
+};
+
+/**
+ * 🎨 Markdown转HTML工具函数
+ */
+const convertMarkdownToHTML = (markdown: string, title?: string): string => {
+  let html = markdown
+    // 标题转换
+    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+    // 粗体和斜体
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    // 链接
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+    // 图片
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width: 100%; height: auto;">')
+    // 段落
+    .split('\n\n')
+    .map(paragraph => paragraph.trim() ? `<p>${paragraph.replace(/\n/g, '<br>')}</p>` : '')
+    .join('');
+
+  // 构建完整HTML文档
+  return `
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${title || '文章'}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #fafafa;
+        }
+        .article {
+            background-color: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1, h2, h3 { color: #2c3e50; margin-top: 30px; margin-bottom: 15px; }
+        h1 { font-size: 2em; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        h2 { font-size: 1.5em; }
+        h3 { font-size: 1.2em; }
+        p { margin-bottom: 15px; }
+        img { display: block; margin: 20px auto; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        a { color: #3498db; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .meta { color: #7f8c8d; font-size: 0.9em; text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #ecf0f1; }
+    </style>
+</head>
+<body>
+    <div class="article">
+        ${html}
+        <div class="meta">
+            <p>📝 由AI写作助手生成 • ${new Date().toLocaleDateString('zh-CN')}</p>
+        </div>
+    </div>
+</body>
+</html>`;
+};
+
+/**
+ * 🎨 Markdown转富文本格式（移除Markdown语法）
+ */
+const convertMarkdownToRichText = (markdown: string): string => {
+  return markdown
+    // 移除Markdown语法，保留内容
+    .replace(/^#{1,6}\s+/gm, '') // 移除标题标记
+    .replace(/\*\*(.*?)\*\*/g, '$1') // 移除粗体标记
+    .replace(/\*(.*?)\*/g, '$1') // 移除斜体标记
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1') // 保留链接文字
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '[图片]') // 图片占位符
+    .replace(/```[\s\S]*?```/g, '[代码块]') // 代码块占位符
+    .replace(/`([^`]+)`/g, '$1') // 移除行内代码标记
+    .trim();
+};
+
+/**
  * 格式化文件大小
  */
 export const formatFileSize = (bytes: number): string => {

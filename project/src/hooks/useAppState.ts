@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { AppState, KnowledgeBaseArticle, OutlineNode, GeneratedImage, CoverOption, StylePrototype, APIConfig } from '../types';
+import { AppState, KnowledgeBaseArticle, OutlineNode, GeneratedImage, StylePrototype, APIConfig } from '../types';
 import { 
   getKnowledgeBase, 
   saveKnowledgeBase, 
@@ -18,7 +18,6 @@ import {
 import { 
   analyzeStyleElements, 
   recommendStylePrototypes, 
-  generateOutline, 
   generateFullArticle,
   processEditInstruction,
   callPerplexityAPI,
@@ -57,6 +56,14 @@ export const useAppState = () => {
   });
 
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  // 🚀 新增：并行进度跟踪状态
+  const [parallelTasks, setParallelTasks] = useState<Array<{
+    id: string;
+    name: string;
+    status: 'pending' | 'running' | 'completed' | 'failed';
+    message?: string;
+  }>>([]);
   const [stylePrototypes, setStylePrototypes] = useState<StylePrototype[]>([]);
 
   // 初始化当前文章数据
@@ -740,8 +747,22 @@ ${appState.currentArticle.outline.map(node => {
 
     setIsProcessing(true);
     
+    // 🚀 初始化并行任务跟踪
+    const coverStyleNames = ['简约商务', '创意设计', '专业学术', '时尚生活'];
+    const initialTasks = coverStyleNames.map(style => ({
+      id: `cover_${style}`,
+      name: `${style}风格封面`,
+      status: 'pending' as const,
+      message: '等待开始...'
+    }));
+    setParallelTasks(initialTasks);
+    
     try {
       // 使用AI分析完整文章内容
+      setParallelTasks(prev => prev.map(task => 
+        task.id === 'cover_简约商务' ? { ...task, status: 'running', message: '分析文章内容...' } : task
+      ));
+      
       const { analyzeContentWithAI } = await import('../utils/api');
       const contentAnalysis = await analyzeContentWithAI(appState.currentArticle.content);
       
@@ -774,10 +795,12 @@ ${appState.currentArticle.outline.map(node => {
         }
       ];
 
-      // 生成多个封面选项
-      const coverOptions = [];
+      // 🚀 并行生成多个封面选项 - 性能优化
+      console.log('🎨 开始并行生成4种风格封面...');
+      const startTime = Date.now();
       
-      for (const styleInfo of coverStyles) {
+      // 创建所有封面生成的Promise
+      const coverPromises = coverStyles.map(async (styleInfo, index) => {
         const prompt = `
 作为专业的微信公众号封面设计师，请为以下文章生成${styleInfo.style}风格的封面图：
 
@@ -789,7 +812,7 @@ ${appState.currentArticle.outline.map(node => {
 - 视觉关键词：${contentAnalysis.visualKeywords?.join(', ') || '专业、现代'}
 
 【完整文章内容】：
-${appState.currentArticle.content.substring(0, 1000)}...
+${appState.currentArticle?.content?.substring(0, 1000) || ''}...
 
 【${styleInfo.style}风格设计要求】：
 
@@ -819,26 +842,73 @@ ${appState.currentArticle.content.substring(0, 1000)}...
 `;
 
         try {
+          // 🚀 更新任务状态为运行中
+          setParallelTasks(prev => prev.map(task => 
+            task.id === `cover_${styleInfo.style}` 
+              ? { ...task, status: 'running', message: `正在生成${styleInfo.style}风格...` } 
+              : task
+          ));
+          
+          console.log(`⏱️ 开始生成${styleInfo.style}风格封面 (${index + 1}/4)`);
           const imageUrl = await generateImage(prompt);
           
-          coverOptions.push({
-            id: `cover_${styleInfo.style}_${Date.now()}`,
+          const coverOption = {
+            id: `cover_${styleInfo.style}_${Date.now()}_${index}`,
             style: styleInfo.style,
             url: imageUrl,
             prompt: prompt,
             description: styleInfo.description
-          });
+          };
           
-          // 给用户一些进度反馈
-          toast.success(`${styleInfo.style}风格封面已生成`);
+          // 🚀 更新任务状态为完成
+          setParallelTasks(prev => prev.map(task => 
+            task.id === `cover_${styleInfo.style}` 
+              ? { ...task, status: 'completed', message: `${styleInfo.style}风格封面生成成功` } 
+              : task
+          ));
+          
+          // 实时进度反馈
+          toast.success(`✅ ${styleInfo.style}风格封面已生成 (${index + 1}/4)`);
+          console.log(`✅ ${styleInfo.style}风格封面生成成功:`, imageUrl);
+          
+          return coverOption;
           
         } catch (error) {
-          console.error(`${styleInfo.style}风格封面生成失败:`, error);
-          // 继续生成其他风格，不中断整个流程
+          // 🚀 更新任务状态为失败
+          setParallelTasks(prev => prev.map(task => 
+            task.id === `cover_${styleInfo.style}` 
+              ? { ...task, status: 'failed', message: `${styleInfo.style}风格封面生成失败: ${error instanceof Error ? error.message : '未知错误'}` } 
+              : task
+          ));
+          
+          console.error(`❌ 生成${styleInfo.style}风格封面失败:`, error);
+          toast.error(`❌ ${styleInfo.style}风格封面生成失败`);
+          
+          // 返回一个错误占位符，避免中断整个流程
+          return {
+            id: `cover_${styleInfo.style}_error_${Date.now()}_${index}`,
+            style: styleInfo.style,
+            url: '', // 空URL表示生成失败
+            prompt: prompt,
+            description: `${styleInfo.description} (生成失败)`
+          };
         }
-      }
+      });
+
+      // 🔥 并行等待所有封面生成完成
+      console.log('⚡ 等待所有封面并行生成完成...');
+      const coverResults = await Promise.all(coverPromises);
+      
+      // 过滤掉生成失败的封面
+      const coverOptions = coverResults.filter(cover => cover.url !== '');
+      
+      const endTime = Date.now();
+      const totalTime = endTime - startTime;
+      console.log(`🎉 封面生成完成! 成功生成${coverOptions.length}/4个封面，总用时: ${totalTime}ms`);
 
       if (coverOptions.length === 0) {
+        // 🚀 清理任务状态
+        setParallelTasks([]);
         throw new Error('所有风格的封面都生成失败');
       }
 
@@ -851,11 +921,20 @@ ${appState.currentArticle.content.substring(0, 1000)}...
         } : undefined
       }));
 
-      toast.success(`成功生成${coverOptions.length}种风格的封面选项！`);
+      // 🚀 显示完成状态提示
+      toast.success(`🎉 并行生成完成! ${coverOptions.length}种风格封面，用时${totalTime}ms`);
+      
+      // 🚀 延迟清理任务状态，让用户看到完成状态
+      setTimeout(() => {
+        setParallelTasks([]);
+      }, 3000);
       
     } catch (error) {
       console.error('封面生成失败:', error);
       toast.error('封面生成失败，请重试');
+      
+      // 🚀 清理任务状态
+      setParallelTasks([]);
     } finally {
       setIsProcessing(false);
     }
@@ -1181,6 +1260,7 @@ ${appState.currentArticle.content.substring(0, 1000)}...
   return {
     appState,
     isProcessing,
+    parallelTasks, // 🚀 新增：并行任务状态
     stylePrototypes,
     addToKnowledgeBase,
     deleteArticle,

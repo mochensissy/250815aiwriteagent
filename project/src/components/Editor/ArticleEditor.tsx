@@ -10,7 +10,7 @@ import { MessageCircle, Image, Download, Wand2, MoreHorizontal, Copy, Eye, Edit3
 import { EditSuggestion } from '../../types';
 import ReactMarkdown from 'react-markdown';
 import toast from 'react-hot-toast';
-import { copyToClipboard, downloadTextFile } from '../../utils/userExperience';
+import { copyToClipboard, exportArticle } from '../../utils/userExperience';
 
 interface ArticleEditorProps {
   content: string;
@@ -281,26 +281,44 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({
     }
   };
 
-  // 改进的导出功能
-  const handleExport = () => {
+  // 🚀 改进的多格式导出功能
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  
+  const handleExport = (format: 'copy' | 'markdown' | 'html' | 'text' | 'richtext' | 'json') => {
     if (!content.trim()) {
       toast.error('文章内容为空，无法导出');
       return;
     }
 
-    // 复制到剪贴板
-    copyToClipboard(content, '文章已复制到剪贴板');
-  };
-
-  // 下载为Markdown文件
-  const handleDownloadMarkdown = () => {
-    if (!content.trim()) {
-      toast.error('文章内容为空，无法下载');
-      return;
+    const title = content.split('\n')[0]?.replace(/^#+\s*/, '') || '未命名文章';
+    
+    switch (format) {
+      case 'copy':
+        copyToClipboard(content, '文章已复制到剪贴板');
+        break;
+      case 'markdown':
+        exportArticle.asMarkdown(content, title);
+        break;
+      case 'html':
+        exportArticle.asHTML(content, title);
+        break;
+      case 'text':
+        exportArticle.asText(content, title);
+        break;
+      case 'richtext':
+        exportArticle.copyAsRichText(content);
+        break;
+      case 'json':
+        const metadata = {
+          wordCount: content.length,
+          createdAt: new Date().toISOString(),
+          platform: 'AI写作助手'
+        };
+        exportArticle.asJSON(content, metadata, title);
+        break;
     }
-
-    const filename = `article_${new Date().toISOString().slice(0, 10)}.md`;
-    downloadTextFile(content, filename, 'text/markdown');
+    
+    setShowExportMenu(false);
   };
 
   const editSuggestions: EditSuggestion[] = [
@@ -610,19 +628,49 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({
               
               {/* 导出选项下拉菜单 */}
               <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 min-w-32">
+                {/* 🚀 增强版导出菜单 */}
                 <button
-                  onClick={handleExport}
-                  className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg flex items-center gap-2"
+                  onClick={() => handleExport('copy')}
+                  className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                 >
                   <Copy className="w-3 h-3" />
                   复制文本
                 </button>
                 <button
-                  onClick={handleDownloadMarkdown}
+                  onClick={() => handleExport('richtext')}
+                  className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  复制富文本
+                </button>
+                <div className="border-t border-gray-100 my-1"></div>
+                <button
+                  onClick={() => handleExport('markdown')}
+                  className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                >
+                  <Download className="w-3 h-3" />
+                  下载Markdown
+                </button>
+                <button
+                  onClick={() => handleExport('html')}
+                  className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                >
+                  <Download className="w-3 h-3" />
+                  下载HTML
+                </button>
+                <button
+                  onClick={() => handleExport('text')}
+                  className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                >
+                  <Download className="w-3 h-3" />
+                  下载纯文本
+                </button>
+                <button
+                  onClick={() => handleExport('json')}
                   className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 rounded-b-lg flex items-center gap-2"
                 >
                   <Download className="w-3 h-3" />
-                  下载MD
+                  下载JSON
                 </button>
               </div>
             </div>
