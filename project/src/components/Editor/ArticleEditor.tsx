@@ -284,7 +284,7 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({
   // 🚀 改进的多格式导出功能
   const [showExportMenu, setShowExportMenu] = useState(false);
   
-  const handleExport = (format: 'copy' | 'markdown' | 'html' | 'text' | 'richtext' | 'json') => {
+  const handleExport = (format: 'copy' | 'markdown' | 'html' | 'text' | 'richtext' | 'richhtml' | 'json') => {
     if (!content.trim()) {
       toast.error('文章内容为空，无法导出');
       return;
@@ -307,6 +307,9 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({
         break;
       case 'richtext':
         exportArticle.copyAsRichText(content);
+        break;
+      case 'richhtml':
+        exportArticle.copyAsHTML(content);
         break;
       case 'json':
         const metadata = {
@@ -643,6 +646,13 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({
                   <Sparkles className="w-3 h-3" />
                   复制富文本
                 </button>
+                <button
+                  onClick={() => handleExport('richhtml')}
+                  className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                >
+                  <Wand2 className="w-3 h-3" />
+                  复制样式HTML
+                </button>
                 <div className="border-t border-gray-100 my-1"></div>
                 <button
                   onClick={() => handleExport('markdown')}
@@ -768,35 +778,99 @@ const ArticleEditor: React.FC<ArticleEditorProps> = ({
           <div className="w-1/2 bg-gray-50 overflow-y-auto">
             <div className="p-6">
               <div className="bg-white rounded-lg shadow-sm min-h-full border border-gray-200">
-                <div className="wechat-preview">
+                <div className="wechat-preview p-6">
+                  <div className="text-center mb-8">
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">📱 微信公众号预览</h1>
+                    <p className="text-sm text-gray-500">实时预览效果</p>
+                  </div>
                   <ReactMarkdown 
+                    key={content} // 🚀 强制重新渲染
                     components={{
-                      h1: ({children}) => <h1 className="text-2xl font-bold text-gray-900 mb-4 leading-tight">{children}</h1>,
-                      h2: ({children}) => <h2 className="text-xl font-bold text-gray-800 mb-3 mt-6 leading-tight">{children}</h2>,
-                      h3: ({children}) => <h3 className="text-lg font-bold text-gray-800 mb-2 mt-5 leading-tight">{children}</h3>,
-                      p: ({children}) => <p className="text-gray-700 mb-4 leading-relaxed">{children}</p>,
-                      strong: ({children}) => <strong className="font-bold text-gray-900">{children}</strong>,
-                      em: ({children}) => <em className="italic text-gray-700">{children}</em>,
-                      ul: ({children}) => <ul className="list-disc list-inside mb-4 text-gray-700 space-y-1">{children}</ul>,
-                      ol: ({children}) => <ol className="list-decimal list-inside mb-4 text-gray-700 space-y-1">{children}</ol>,
-                      blockquote: ({children}) => (
-                        <blockquote className="border-l-4 border-blue-500 pl-4 py-2 mb-4 bg-blue-50 text-gray-700 italic">
+                      h1: ({children}) => (
+                        <h1 className="text-2xl font-bold text-gray-900 mb-6 mt-8 pb-3 border-b-2 border-gray-200 leading-tight">
                           {children}
+                        </h1>
+                      ),
+                      h2: ({children}) => (
+                        <h2 className="text-xl font-bold text-gray-800 mb-4 mt-8 leading-tight relative">
+                          <span className="inline-block w-1 h-6 bg-blue-500 mr-3"></span>
+                          {children}
+                        </h2>
+                      ),
+                      h3: ({children}) => (
+                        <h3 className="text-lg font-bold text-gray-800 mb-3 mt-6 leading-tight">
+                          • {children}
+                        </h3>
+                      ),
+                      h4: ({children}) => (
+                        <h4 className="text-base font-semibold text-gray-800 mb-2 mt-4 leading-tight">
+                          ▪ {children}
+                        </h4>
+                      ),
+                      p: ({children}) => (
+                        <p className="text-gray-700 mb-5 leading-relaxed text-base" style={{lineHeight: '1.8'}}>
+                          {children}
+                        </p>
+                      ),
+                      strong: ({children}) => (
+                        <strong className="font-bold text-gray-900 bg-yellow-100 px-1 rounded">
+                          {children}
+                        </strong>
+                      ),
+                      em: ({children}) => (
+                        <em className="italic text-blue-600 font-medium">
+                          {children}
+                        </em>
+                      ),
+                      ul: ({children}) => (
+                        <ul className="mb-5 text-gray-700 space-y-2 pl-4">
+                          {children}
+                        </ul>
+                      ),
+                      ol: ({children}) => (
+                        <ol className="mb-5 text-gray-700 space-y-2 pl-4">
+                          {children}
+                        </ol>
+                      ),
+                      li: ({children}) => (
+                        <li className="flex items-start">
+                          <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+                          <span className="flex-1">{children}</span>
+                        </li>
+                      ),
+                      blockquote: ({children}) => (
+                        <blockquote className="border-l-4 border-blue-500 pl-6 py-3 mb-5 bg-blue-50 text-gray-700 italic rounded-r-lg">
+                          <div className="flex items-start">
+                            <span className="text-blue-500 text-2xl mr-2">"</span>
+                            <div className="flex-1">{children}</div>
+                          </div>
                         </blockquote>
                       ),
                       code: ({children}) => (
-                        <code className="bg-gray-100 text-red-600 px-2 py-1 rounded text-sm font-mono">
+                        <code className="bg-gray-100 text-red-600 px-2 py-1 rounded text-sm font-mono border">
                           {children}
                         </code>
                       ),
                       pre: ({children}) => (
-                        <pre className="bg-gray-100 p-4 rounded-lg mb-4 overflow-x-auto text-sm">
+                        <pre className="bg-gray-100 p-4 rounded-lg mb-5 overflow-x-auto text-sm border border-gray-200">
                           {children}
                         </pre>
+                      ),
+                      img: ({src, alt}) => (
+                        <div className="text-center my-6">
+                          <img 
+                            src={src} 
+                            alt={alt || ''} 
+                            className="max-w-full h-auto rounded-lg shadow-sm border border-gray-200"
+                          />
+                          {alt && (
+                            <p className="text-sm text-gray-500 mt-2 italic">{alt}</p>
+                          )}
+                        </div>
                       )
                     }}
                   >
-                    {content || '# 文章标题\n\n开始编辑您的文章内容，右侧将实时显示微信公众号样式的预览效果。\n\n## 二级标题\n\n这里是正文内容，支持**粗体**、*斜体*等格式。\n\n> 这是一个引用块\n\n- 列表项1\n- 列表项2\n- 列表项3'}
+                    {content.trim() || '# 文章标题\n\n开始编辑您的文章内容，右侧将实时显示微信公众号样式的预览效果。\n\n## 二级标题\n\n这里是正文内容，支持**粗体**、*斜体*等格式。\n\n> 这是一个引用块\n\n- 列表项1\n- 列表项2\n- 列表项3'}
                   </ReactMarkdown>
                 </div>
               </div>

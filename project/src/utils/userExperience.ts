@@ -110,10 +110,51 @@ export const exportArticle = {
     try {
       // 转换Markdown为富文本
       const richTextContent = convertMarkdownToRichText(content);
-      return await copyToClipboard(richTextContent, '富文本格式已复制，可直接粘贴到微信公众号');
+      return await copyToClipboard(richTextContent, '✨ 富文本格式已复制！可直接粘贴到微信公众号编辑器');
     } catch (error) {
       console.error('富文本复制失败:', error);
       toast.error('富文本复制失败，请使用普通复制');
+      return false;
+    }
+  },
+
+  /**
+   * 🚀 复制HTML格式（保持样式的富文本）
+   */
+  copyAsHTML: async (content: string): Promise<boolean> => {
+    try {
+      const htmlContent = convertMarkdownToStyledHTML(content);
+      
+      // 创建一个临时的div来复制HTML
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = htmlContent;
+      tempDiv.style.position = 'absolute';
+      tempDiv.style.left = '-9999px';
+      document.body.appendChild(tempDiv);
+      
+      // 选择HTML内容
+      const range = document.createRange();
+      range.selectNodeContents(tempDiv);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      
+      // 复制到剪贴板
+      const success = document.execCommand('copy');
+      
+      // 清理
+      document.body.removeChild(tempDiv);
+      selection?.removeAllRanges();
+      
+      if (success) {
+        toast.success('🎨 HTML格式已复制！可直接粘贴到公众号，保持样式');
+        return true;
+      } else {
+        throw new Error('HTML复制失败');
+      }
+    } catch (error) {
+      console.error('HTML复制失败:', error);
+      toast.error('HTML复制失败，请使用普通复制');
       return false;
     }
   },
@@ -137,6 +178,68 @@ export const exportArticle = {
     const filename = title ? `${title.replace(/[^\w\s]/gi, '')}_${timestamp}.json` : `article_${timestamp}.json`;
     downloadTextFile(JSON.stringify(exportData, null, 2), filename, 'application/json');
   }
+};
+
+/**
+ * 🚀 专门用于微信公众号的样式化HTML转换
+ */
+const convertMarkdownToStyledHTML = (markdown: string): string => {
+  let html = markdown
+    // 标题转换 - 微信公众号样式
+    .replace(/^# (.*$)/gim, '<h1 style="font-size: 24px; font-weight: bold; color: #333; margin: 20px 0 15px 0; padding-bottom: 10px; border-bottom: 2px solid #e5e5e5; line-height: 1.4;">$1</h1>')
+    .replace(/^## (.*$)/gim, '<h2 style="font-size: 20px; font-weight: bold; color: #333; margin: 25px 0 12px 0; line-height: 1.4; position: relative; padding-left: 15px;"><span style="position: absolute; left: 0; top: 0; width: 4px; height: 100%; background-color: #4285f4;"></span>$1</h2>')
+    .replace(/^### (.*$)/gim, '<h3 style="font-size: 18px; font-weight: bold; color: #333; margin: 20px 0 10px 0; line-height: 1.4;">• $1</h3>')
+    .replace(/^#### (.*$)/gim, '<h4 style="font-size: 16px; font-weight: 600; color: #333; margin: 18px 0 8px 0; line-height: 1.4;">▪ $1</h4>')
+    
+    // 粗体和斜体 - 微信公众号样式
+    .replace(/\*\*(.*?)\*\*/g, '<strong style="font-weight: bold; color: #333; background-color: #fff3cd; padding: 2px 4px; border-radius: 3px;">$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em style="font-style: italic; color: #4285f4; font-weight: 500;">$1</em>')
+    
+    // 链接 - 保持可点击
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color: #4285f4; text-decoration: none; border-bottom: 1px dotted #4285f4;">$1</a>')
+    
+    // 图片 - 居中显示
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<div style="text-align: center; margin: 20px 0;"><img src="$2" alt="$1" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border: 1px solid #e5e5e5;"><p style="font-size: 14px; color: #666; margin-top: 8px; font-style: italic;">$1</p></div>')
+    
+    // 处理段落
+    .split('\n\n')
+    .map(paragraph => {
+      paragraph = paragraph.trim();
+      if (!paragraph) return '';
+      
+      // 处理列表
+      if (paragraph.includes('\n- ') || paragraph.includes('\n* ')) {
+        const listItems = paragraph.split('\n').filter(line => line.trim().match(/^[\-\*]\s+/));
+        const listHTML = listItems.map(item => {
+          const content = item.replace(/^[\-\*]\s+/, '');
+          return `<li style="margin: 8px 0; line-height: 1.6; display: flex; align-items: flex-start;"><span style="color: #4285f4; margin-right: 8px; font-weight: bold;">•</span><span style="flex: 1;">${content}</span></li>`;
+        }).join('');
+        return `<ul style="margin: 15px 0; padding-left: 0; list-style: none;">${listHTML}</ul>`;
+      }
+      
+      // 处理有序列表
+      if (paragraph.includes('\n1. ') || /\n\d+\.\s+/.test(paragraph)) {
+        const listItems = paragraph.split('\n').filter(line => line.trim().match(/^\d+\.\s+/));
+        const listHTML = listItems.map((item, index) => {
+          const content = item.replace(/^\d+\.\s+/, '');
+          return `<li style="margin: 8px 0; line-height: 1.6; display: flex; align-items: flex-start;"><span style="color: #4285f4; margin-right: 8px; font-weight: bold; min-width: 20px;">${index + 1}.</span><span style="flex: 1;">${content}</span></li>`;
+        }).join('');
+        return `<ol style="margin: 15px 0; padding-left: 0; list-style: none;">${listHTML}</ol>`;
+      }
+      
+      // 处理引用
+      if (paragraph.startsWith('>')) {
+        const content = paragraph.replace(/^>\s*/, '');
+        return `<blockquote style="border-left: 4px solid #4285f4; padding: 15px 20px; margin: 20px 0; background-color: #f8f9fa; border-radius: 0 8px 8px 0; font-style: italic; color: #555; position: relative;"><span style="color: #4285f4; font-size: 24px; position: absolute; top: 10px; left: 10px;">"</span><div style="margin-left: 20px;">${content}</div></blockquote>`;
+      }
+      
+      // 普通段落
+      return `<p style="color: #333; margin: 15px 0; line-height: 1.8; font-size: 16px; text-align: justify;">${paragraph.replace(/\n/g, '<br>')}</p>`;
+    })
+    .filter(p => p)
+    .join('');
+    
+  return html;
 };
 
 /**
@@ -207,18 +310,47 @@ const convertMarkdownToHTML = (markdown: string, title?: string): string => {
 };
 
 /**
- * 🎨 Markdown转富文本格式（移除Markdown语法）
+ * 🎨 Markdown转富文本格式（保持结构，优化微信公众号显示）
  */
 const convertMarkdownToRichText = (markdown: string): string => {
   return markdown
-    // 移除Markdown语法，保留内容
-    .replace(/^#{1,6}\s+/gm, '') // 移除标题标记
-    .replace(/\*\*(.*?)\*\*/g, '$1') // 移除粗体标记
-    .replace(/\*(.*?)\*/g, '$1') // 移除斜体标记
+    // 处理标题 - 保持层级结构但用可视化方式
+    .replace(/^# (.*$)/gm, '📝 $1\n\n') // 一级标题
+    .replace(/^## (.*$)/gm, '🔸 $1\n\n') // 二级标题  
+    .replace(/^### (.*$)/gm, '• $1\n\n') // 三级标题
+    .replace(/^#### (.*$)/gm, '▪ $1\n\n') // 四级标题
+    
+    // 处理强调格式 - 转换为视觉符号
+    .replace(/\*\*(.*?)\*\*/g, '【$1】') // 粗体转为中文方括号
+    .replace(/\*(.*?)\*/g, '「$1」') // 斜体转为中文引号
+    
+    // 处理链接 - 保留有用信息
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1') // 保留链接文字
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '[图片]') // 图片占位符
-    .replace(/```[\s\S]*?```/g, '[代码块]') // 代码块占位符
-    .replace(/`([^`]+)`/g, '$1') // 移除行内代码标记
+    
+    // 处理图片 - 用中文占位符
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '\n📷 [配图]\n\n') // 图片占位符
+    
+    // 处理列表 - 保持列表结构
+    .replace(/^[\s]*-[\s]+(.+)$/gm, '◦ $1') // 无序列表
+    .replace(/^[\s]*\*[\s]+(.+)$/gm, '◦ $1') // 无序列表(星号)
+    .replace(/^[\s]*\d+\.[\s]+(.+)$/gm, (match, p1, offset, string) => {
+      // 有序列表 - 自动编号
+      const lines = string.substring(0, offset).split('\n');
+      const listCount = lines.filter(line => /^[\s]*\d+\.[\s]+/.test(line)).length + 1;
+      return `${listCount}. ${p1}`;
+    })
+    
+    // 处理引用 - 转换为易识别格式
+    .replace(/^>\s*(.+)$/gm, '💭 $1') // 引用块
+    
+    // 处理代码 - 用中文标识
+    .replace(/```[\s\S]*?```/g, '\n📋 [代码块]\n\n') // 代码块占位符
+    .replace(/`([^`]+)`/g, '『$1』') // 行内代码用书名号
+    
+    // 清理多余的空行，但保持段落结构
+    .replace(/\n{3,}/g, '\n\n') // 最多保持两个换行
+    .replace(/^\n+/, '') // 移除开头的空行
+    .replace(/\n+$/, '') // 移除结尾的空行
     .trim();
 };
 
